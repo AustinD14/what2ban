@@ -20,11 +20,6 @@ a {
   color: #000000;
 }
 
-button {
-  outline: none;
-  border: none;
-}
-
 .input,
 .passwordInput,
 .emailInput,
@@ -57,31 +52,15 @@ button {
   border-radius: 1rem;
 }
 
-.primaryButton {
-  cursor: pointer;
-  background: #00cc66;
-  border-radius: 1rem;
-  padding: 0.85rem 2rem;
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 1.25rem;
-  width: 80%;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .formLabel {
   font-weight: 600;
-  margin-top: 1rem;
-  display: block;
+  margin-right: 1rem;
 }
 
 .navbar {
   display: flex;
   align-items: center;
-  
+
   background: rebeccapurple;
   color: white;
   font-family: Helvetica;
@@ -98,4 +77,47 @@ button {
   padding: 16px 16px;
   cursor: pointer;
 }
-  vertical-align: middle;
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.accounId_form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.button3 {
+  display: inline-block;
+  padding: 0.3em 1.2em;
+  margin: 0 0.3em 0.3em 0;
+  border-radius: 2em;
+  box-sizing: border-box;
+  text-decoration: none;
+  font-family: "Roboto", sans-serif;
+  font-weight: 300;
+  color: #ffffff;
+  background-color: rebeccapurple;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.button3:hover {
+  background-color: rgb(116, 57, 180);
+}
+
+@media all and (max-width: 30em) {
+  .button3 {
+    display: block;
+    margin: 0.2em auto;
+  }
+}
+
+.formInputName {
+  margin-right: 1rem;
+}

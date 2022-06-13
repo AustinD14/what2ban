@@ -1,26 +1,36 @@
 import { useState, useEffect, useRef } from "react";
-
 import React from "react";
+import axios from "axios";
+import Cards from "../components/Cards";
 
 function MainPage() {
   const [formData, setFormData] = useState({
-    steamId: "1213",
+    accounId: "",
   });
-  const [loading, setLoading] = useState(false);
-  const { steamId } = formData;
+  const { accounId } = formData;
+  const [playerData, setPlayerData] = useState({
+    id: "",
+    name: "",
+    avatar: "",
+  });
+  const [cardsOnContainer, setCardsOnContainer] = useState([]);
 
+  //will get values from opendota using accounId
   const onSubmit = async (e) => {
     e.preventDefault();
 
-    // setLoading(true);
-
-    const formDataCopy = {
-      ...formData,
-    };
-
-    console.log(formDataCopy);
+    try {
+      const response = await axios.get(
+        "https://api.opendota.com/api/players/" + accounId
+      );
+      console.log(response);
+      
+    } catch (error) {
+      console.log(error);
+    }
   };
 
+  //takes care of steamId input
   const onMutate = (e) => {
     let boolean = null;
 
@@ -43,20 +53,23 @@ function MainPage() {
   return (
     <div className="profile">
       <main>
-        <form onSubmit={onSubmit}>
-          <label className="formLabel">SteamId</label>
+        <form className="accounId_form" onSubmit={onSubmit}>
+          <label className="formLabel">Dota2 ID:</label>
           <input
             className="formInputName"
-            type="text"
-            id="title"
-            value={steamId}
-            onChange={e => setFormData(e.target.value)}
+            type="number"
+            iD="accounId"
+            value={accounId}
+            onChange={onMutate}
             required
           />
-          <button type="submit" className="primaryButton createListingButton">
+          <button type="submit" className="button3" event={()=>{
+            setCardsOnContainer([...cardsOnContainer, <Cards props = {playerData}/>])
+          }}>
             Submit
           </button>
         </form>
+        <div className="cards_container">{cardsOnContainer}</div>
       </main>
     </div>
   );
