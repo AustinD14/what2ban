@@ -13,7 +13,9 @@ const CardStyle = {
 function Cards(props) {
   return (
     <div style={CardStyle}>
-      <span>{props.id}</span>
+      <img src={props.props.avatar} />
+      <h3>{props.props.id}</h3>
+      <h4>{props.props.name}</h4>
     </div>
   );
 }

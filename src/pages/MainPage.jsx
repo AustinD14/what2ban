@@ -7,24 +7,42 @@ function MainPage() {
   const [formData, setFormData] = useState({
     accounId: "",
   });
-  const { accounId } = formData;
+  const { accountID } = formData;
   const [playerData, setPlayerData] = useState({
     id: "",
     name: "",
     avatar: "",
   });
   const [cardsOnContainer, setCardsOnContainer] = useState([]);
+  const spawnCard = (data, key) => {
+    setCardsOnContainer([
+      ...cardsOnContainer,
+      <Cards props={data} key={key} />,
+    ]);
+  };
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      spawnCard(playerData, accountID);
+    }
+  }, [playerData]);
 
-  //will get values from opendota using accounId
+  //will get values from opendota using accountID
   const onSubmit = async (e) => {
     e.preventDefault();
 
     try {
       const response = await axios.get(
-        "https://api.opendota.com/api/players/" + accounId
+        "https://api.opendota.com/api/players" + accountID
       );
       console.log(response);
-      
+      setPlayerData({
+        id: response.data.profile.account_id,
+        name: response.data.profile.personaname,
+        avatar: response.data.profile.avatar,
+      });
     } catch (error) {
       console.log(error);
     }
@@ -58,14 +76,12 @@ function MainPage() {
           <input
             className="formInputName"
             type="number"
-            iD="accounId"
-            value={accounId}
+            id="accounId"
+            value={accountID}
             onChange={onMutate}
             required
           />
-          <button type="submit" className="button3" event={()=>{
-            setCardsOnContainer([...cardsOnContainer, <Cards props = {playerData}/>])
-          }}>
+          <button type="submit" className="button3">
             Submit
           </button>
         </form>

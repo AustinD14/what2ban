@@ -121,3 +121,7 @@ input::-webkit-inner-spin-button {
 .formInputName {
   margin-right: 1rem;
 }
+
+.cards_container {
+  display: flex;
+}
