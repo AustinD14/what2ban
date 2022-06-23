@@ -124,4 +124,17 @@ input::-webkit-inner-spin-button {
 
 .cards_container {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+}
+
+.card_style {
+  border: 1px solid #03506f;
+  color: aliceblue;
+  border-radius: 30px;
+  padding: 20px;
+  margin: 20px;
+  width: 270px;
+  height: auto;
+  background-color: rebeccapurple;
 }

@@ -4,24 +4,20 @@ import axios from "axios";
 import Cards from "../components/Cards";
 
 function MainPage() {
+  const isInitialMount = useRef(true);
   const [formData, setFormData] = useState({
-    accounId: "",
+    accountID: "",
   });
   const { accountID } = formData;
   const [playerData, setPlayerData] = useState({
     id: "",
     name: "",
     avatar: "",
+    mostPlayedHeroes: "",
   });
   const [cardsOnContainer, setCardsOnContainer] = useState([]);
-  const spawnCard = (data, key) => {
-    setCardsOnContainer([
-      ...cardsOnContainer,
-      <Cards props={data} key={key} />,
-    ]);
-  };
-  const isInitialMount = useRef(true);
   useEffect(() => {
+    //will spawn the cards when player data is updated
     if (isInitialMount.current) {
       isInitialMount.current = false;
     } else {
@@ -29,26 +25,39 @@ function MainPage() {
     }
   }, [playerData]);
 
+  //function used in useEffect
+  const spawnCard = (data, key) => {
+    setCardsOnContainer([
+      ...cardsOnContainer,
+      <Cards props={data} key={key} />,
+    ]);
+  };
+
   //will get values from opendota using accountID
   const onSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      const response = await axios.get(
-        "https://api.opendota.com/api/players" + accountID
+      const playerRes = await axios.get(
+        "https://api.opendota.com/api/players/" + accountID
       );
-      console.log(response);
+      const heroesRes = await axios.get(
+        "https://api.opendota.com/api/players/" +
+          accountID +
+          "/heroes?limit=1000"
+      );
       setPlayerData({
-        id: response.data.profile.account_id,
-        name: response.data.profile.personaname,
-        avatar: response.data.profile.avatar,
+        id: playerRes.data.profile.account_id,
+        name: playerRes.data.profile.personaname,
+        avatar: playerRes.data.profile.avatar,
+        mostPlayedHeroes: heroesRes.data,
       });
     } catch (error) {
       console.log(error);
     }
   };
 
-  //takes care of steamId input
+  //takes care of accountID input
   const onMutate = (e) => {
     let boolean = null;
 
@@ -76,7 +85,7 @@ function MainPage() {
           <input
             className="formInputName"
             type="number"
-            id="accounId"
+            id="accountID"
             value={accountID}
             onChange={onMutate}
             required
