@@ -1,5 +1,4 @@
-#Check It Out Here
-#https://what2ban.web.app/
+#Check It Out Here https://what2ban.web.app/
 
 # Getting Started with Create React App
 
