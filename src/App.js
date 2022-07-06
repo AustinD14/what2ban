@@ -1,5 +1,7 @@
-import Navbar from "./components/Navbar";
+import Header from "./components/Header";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
+import { Container } from "react-bootstrap";
 
 import MainPage from "./pages/MainPage";
 
@@ -7,10 +9,14 @@ function App() {
   return (
     <>
       <Router>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<MainPage/>} />
-        </Routes>
+        <Header />
+        <main className="py-3">
+          <Container>
+            <Routes>
+              <Route path="/" element={<MainPage />} />
+            </Routes>
+          </Container>
+        </main>
       </Router>
     </>
   );
