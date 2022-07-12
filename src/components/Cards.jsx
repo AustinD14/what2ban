@@ -1,5 +1,7 @@
 import React from "react";
 import heroes from "../Data/heroes.json";
+import Card from "react-bootstrap/Card";
+import ListGroup from "react-bootstrap/ListGroup";
 
 function Cards(props) {
   // console.log(props.props.mostPlayedHeroes);
@@ -16,17 +18,34 @@ function Cards(props) {
   }
 
   const listHeroes = heroList.map((heroList) => (
-    <li key={heroList}>{heroList}</li>
+    <ListGroup.Item className="hero_list" key={heroList}>
+      {heroList}
+    </ListGroup.Item>
   ));
 
   console.log(heroList);
   return (
-    <div className="card_style">
-      <img src={props.props.avatar} />
-      <h3>{props.props.id}</h3>
-      <h4>{props.props.name}</h4>
-      <ul>{listHeroes}</ul>
-    </div>
+    <Card
+      bg="primary"
+      border="secondary"
+      style={{ width: "18rem" }}
+      text="white"
+    >
+      <Card.Body>
+        <div className="card-header">
+          <Card.Img variant="top" src={props.props.avatar} />
+          <div className="card-header-title">
+            <Card.Title>{props.props.name}</Card.Title>
+            <Card.Subtitle className="mb-2 text-muted">
+              {props.props.id}
+            </Card.Subtitle>
+          </div>
+        </div>
+        <ListGroup>
+          {listHeroes}
+        </ListGroup>
+      </Card.Body>
+    </Card>
   );
 }
 
