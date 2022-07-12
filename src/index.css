@@ -10,18 +10,33 @@ main {
 
 .card-header {
   display: flex;
-  margin-bottom: 0;
-  background-color: rgba(0, 0, 0, 0.03);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.125);
 }
 
 .card-header-title {
   display: block;
-  padding-left: .5rem;
-
+  padding-left: 0.5rem;
 }
 
 .hero_list {
-  margin-bottom: .1rem;
+  margin-bottom: 0.1rem;
 }
 
+.accountId_form {
+  display: block;
+}
+.form_container {
+  display: grid;
+  place-items: center;
+}
+
+.formLabel,
+.formInputName {
+  margin-right: 0.5rem;
+  font-weight: bold;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

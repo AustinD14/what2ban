@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import React from "react";
 import axios from "axios";
 import Cards from "../components/Cards";
+import Button from "react-bootstrap/Button";
 
 function MainPage() {
   const isInitialMount = useRef(true);
@@ -80,20 +81,20 @@ function MainPage() {
   return (
     <div className="profile">
       <main>
-        <form className="accounId_form" onSubmit={onSubmit}>
-          <label className="formLabel">Dota2 ID:</label>
-          <input
-            className="formInputName"
-            type="number"
-            id="accountID"
-            value={accountID}
-            onChange={onMutate}
-            required
-          />
-          <button type="submit" className="button3">
-            Submit
-          </button>
-        </form>
+        <div className="form_container">
+          <form className="accountId_form" onSubmit={onSubmit}>
+            <label className="formLabel">Dota2 ID:</label>
+            <input
+              className="formInputName"
+              type="number"
+              id="accountID"
+              value={accountID}
+              onChange={onMutate}
+              required
+            />
+            <Button variant="primary" type="submit">Submit</Button>
+          </form>
+        </div>
         <div className="cards_container">{cardsOnContainer}</div>
       </main>
     </div>

@@ -2798,6 +2798,7 @@ fieldset:disabled .btn {
   color: #fff;
   background-color: #593196;
   border-color: #593196;
+  border-radius: 10px;
 }
 .btn-primary:hover {
   color: #fff;
@@ -4451,6 +4452,7 @@ fieldset:disabled .btn {
   background-color: #fff;
   background-clip: border-box;
   border: 1px solid rgba(0, 0, 0, 0.125);
+  border-radius: 10px;
 }
 .card > hr {
   margin-right: 0;
@@ -4490,7 +4492,7 @@ fieldset:disabled .btn {
 }
 .card-header {
   
-  margin-bottom: 0;
+  margin-bottom: 10px;
   background-color: rgba(0, 0, 0, 0.03);
   border-bottom: 1px solid rgba(0, 0, 0, 0.125);
 }
@@ -4909,7 +4911,7 @@ fieldset:disabled .btn {
 .list-group-item {
   position: relative;
   display: block;
-  padding: 0.5rem 1rem;
+  /* padding: 0.5rem 1rem; */
   color: #17141f;
   text-decoration: none;
   /* background-color: #17141f; */
@@ -6544,6 +6546,7 @@ fieldset:disabled .btn {
 }
 .border-secondary {
   border-color: #a991d4 !important;
+  
 }
 .border-success {
   border-color: #13b955 !important;

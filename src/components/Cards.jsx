@@ -18,9 +18,9 @@ function Cards(props) {
   }
 
   const listHeroes = heroList.map((heroList) => (
-    <h6 className="hero_list" key={heroList}>
+    <ListGroup.Item className="hero_list" key={heroList}>
       {heroList}
-    </h6>
+    </ListGroup.Item>
   ));
 
   console.log(heroList);
@@ -42,7 +42,7 @@ function Cards(props) {
           </div>
         </div>
         <ListGroup>
-          <ListGroup.Item>{listHeroes}</ListGroup.Item>
+          {listHeroes}
         </ListGroup>
       </Card.Body>
     </Card>
