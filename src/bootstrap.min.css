@@ -610,7 +610,7 @@ progress {
   .container-sm,
   .container-xl,
   .container-xxl {
-    max-width: 1320px;
+    max-width: 1470px;
   }
 }
 .row {
@@ -4476,6 +4476,7 @@ fieldset:disabled .btn {
   -ms-flex: 1 1 auto;
   flex: 1 1 auto;
   padding: 1rem 1rem;
+  max-width: 286px;
 }
 .card-title {
   margin-bottom: 0.5rem;
