@@ -26,7 +26,9 @@ export default function PlayerCard({ player, summary, catalog, minimum, sort, vi
         </select>
         <span>{player.status === "ready" ? `${summary.sample.length} matches · ${summary.heroes.length} heroes` : "History"}</span>
       </div>
+      {player.status === "queued" && <div className="card-message" role="status">Queued. Waiting for other players to finish loading…</div>}
       {player.status === "loading" && <div className="card-message" role="status">Loading match history…</div>}
+      {player.status === "retrying" && <div className="card-message" role="status">OpenDota is slow to respond. Trying once more…</div>}
       {player.status === "error" && <div className="card-message"><p role="alert">{player.error}</p><button onClick={onRetry}>Retry</button></div>}
       {player.status === "ready" && summary.sample.length === 0 && <div className="card-message">No matches in this window. Try a longer date range. Private or untracked matches may be unavailable.</div>}
       {player.status === "ready" && summary.sample.length > 0 && (

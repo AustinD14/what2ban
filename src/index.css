@@ -154,6 +154,14 @@ input[type=range] { padding: 0; width: 100%; accent-color: #d57788; height: 16px
 .draft-option > small { display: block; color: var(--muted); margin-top: 4px; }
 .draft-hero-select { display: grid; gap: 6px; margin-bottom: 14px; }
 .draft-hero-select input, .draft-hero-select select { width: 100%; font-size: 12px; }
+.draft-hero-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.draft-hero-add button { font-size: 12px; padding: 8px 12px; }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.new-draft-button { white-space: nowrap; }
+.confirm-panel { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; border-color: #78505b; }
+.confirm-panel h2 { margin-bottom: 4px; }
+.confirm-panel p { margin: 0; }
+.confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .draft-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 .draft-columns .surface { padding: 16px; }
 .with-inspector .draft-overview { grid-template-columns: 1fr; }

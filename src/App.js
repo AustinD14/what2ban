@@ -1,36 +1,53 @@
 import { useEffect, useRef, useState } from "react";
 import fallbackHeroes from "./Data/heroes.json";
 import roster from "./Data/savedRoster.json";
-import { loadHeroes, loadPlayerMatches, loadProfile } from "./openDota";
+import { describeError, loadHeroes, loadPlayerMatches, loadProfile } from "./openDota";
 import { HISTORY_SIZES, summarizeMatches, validPlayerId } from "./scouting";
+import { ACTION_LABELS, DAY_OPTIONS, MAX_PLAYERS, MINIMUM_OPTIONS, restoreSession, saveSession } from "./session";
 import PlayerCard from "./components/PlayerCard";
 import HeroInspector from "./components/HeroInspector";
 import DraftOverview from "./components/DraftOverview";
 
-const ACTION_LABELS = { ban: "Banned", us: "Your pick", them: "Opponent pick" };
+const DAY_LABELS = { 0: "Any date", 30: "Last 30 days", 90: "Last 90 days", 180: "Last 180 days", 365: "Last year" };
 
 export default function App() {
-  const [players, setPlayers] = useState([]);
+  const [initial] = useState(restoreSession);
+  const [players, setPlayers] = useState(() => initial.players.map((player) => ({ ...player, status: "loading", matches: [] })));
   const [catalog, setCatalog] = useState(fallbackHeroes);
   const [catalogError, setCatalogError] = useState(false);
-  const [tab, setTab] = useState("scout");
-  const [view, setView] = useState("pool");
-  const [team, setTeam] = useState("all");
-  const [historyIndex, setHistoryIndex] = useState(2);
-  const [recentSize, setRecentSize] = useState(20);
-  const [days, setDays] = useState(0);
-  const [minimum, setMinimum] = useState(1);
-  const [sort, setSort] = useState("games");
+  const [tab, setTab] = useState(initial.tab);
+  const [view, setView] = useState(initial.view);
+  const [team, setTeam] = useState(initial.team);
+  const [historyIndex, setHistoryIndex] = useState(initial.historyIndex);
+  const [recentSize, setRecentSize] = useState(initial.recentSize);
+  const [days, setDays] = useState(initial.days);
+  const [minimum, setMinimum] = useState(initial.minimum);
+  const [sort, setSort] = useState(initial.sort);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(initial.unlocked);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [rosterOpen, setRosterOpen] = useState(false);
   const [selectedHero, setSelectedHero] = useState(null);
   const [heroSearch, setHeroSearch] = useState("");
-  const [draft, setDraft] = useState([]);
+  const [draft, setDraft] = useState(initial.draft);
+  const [confirmingReset, setConfirmingReset] = useState(false);
   const requests = useRef(new Map());
+  const keepDraftButton = useRef(null);
+
+  // Reload players restored from the last session. Recent histories come from the cache.
+  useEffect(() => {
+    initial.players.forEach((player) => fetchPlayer(player));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    saveSession({ players, draft, unlocked, tab, view, team, historyIndex, recentSize, days, minimum, sort });
+  }, [players, draft, unlocked, tab, view, team, historyIndex, recentSize, days, minimum, sort]);
+
+  useEffect(() => { if (!draft.length) setConfirmingReset(false); }, [draft.length]);
+  useEffect(() => { if (confirmingReset) keepDraftButton.current?.focus(); }, [confirmingReset]);
 
   useEffect(() => {
     let active = true;
@@ -49,11 +66,23 @@ export default function App() {
         ? current.map((entry) => entry.id === player.id ? next : entry)
         : [...current, next];
     });
-    const [history, profile] = await Promise.allSettled([loadPlayerMatches(player.id), loadProfile(player.id)]);
+    const setStatus = (status) => {
+      if (requests.current.get(player.id) !== token) return;
+      setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, status } : entry));
+    };
+    // Saved players already have a name, so their profile isn't requested.
+    const [history, profile] = await Promise.allSettled([
+      loadPlayerMatches(player.id, {
+        onWait: () => setStatus("queued"),
+        onStart: () => setStatus("loading"),
+        onRetry: () => setStatus("retrying"),
+      }),
+      player.saved ? Promise.resolve(null) : loadProfile(player.id),
+    ]);
     if (requests.current.get(player.id) !== token) return;
     setPlayers((current) => current.map((entry) => {
       if (entry.id !== player.id) return entry;
-      if (history.status === "rejected") return { ...entry, status: "error", error: "Couldn’t load matches. Try again in a moment." };
+      if (history.status === "rejected") return { ...entry, status: "error", error: `Couldn’t load matches. ${describeError(history.reason)}` };
       return {
         ...entry, status: "ready", matches: history.value,
         name: player.saved ? player.name : profile.value?.personaname ?? player.name,
@@ -65,7 +94,7 @@ export default function App() {
     const id = validPlayerId(String(rawId));
     if (!id) { setError("Enter a valid Dota 2 Friend ID."); return; }
     if (requests.current.has(id)) { setError("That player is already on the board."); return; }
-    if (requests.current.size >= 10) { setError("The board holds up to ten players."); return; }
+    if (requests.current.size >= MAX_PLAYERS) { setError("The board holds up to ten players."); return; }
     setError("");
     setInput("");
     fetchPlayer({ id, name: savedName ?? id, saved: Boolean(savedName), team: "them" });
@@ -91,6 +120,11 @@ export default function App() {
     });
   }
 
+  function clearDraft() {
+    setDraft([]);
+    setConfirmingReset(false);
+  }
+
   const historySize = HISTORY_SIZES[historyIndex];
   const summarized = players.map((player) => ({
     ...player, summary: summarizeMatches(player.matches ?? [], historySize, days, recentSize),
@@ -103,7 +137,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="rail">
-        <a className="brand" href="/" aria-label="What2Ban home"><span className="brand-mark">W<span>2</span></span><span>what2ban<span className="version">2.0</span></span></a>
+        <a className="brand" href="/" aria-label="What2Ban home" onClick={(event) => { event.preventDefault(); setTab("scout"); }}><span className="brand-mark">W<span>2</span></span><span>what2ban<span className="version">2.0</span></span></a>
         <span className="rail-label">WORKSPACE</span>
         <nav aria-label="Workspace">
           <button className={tab === "scout" ? "active" : ""} onClick={() => setTab("scout")}><span>◫</span> Player scouting <b>{players.length}</b></button>
@@ -114,12 +148,27 @@ export default function App() {
       <main className="workspace">
         <header className="page-header">
           <div><span className="eyebrow">DOTA 2 / SCOUTING WORKSPACE</span><h1>{tab === "scout" ? "Player scouting" : "Draft overview"}</h1></div>
-          <button className="roster-button" aria-expanded={rosterOpen} onClick={() => setRosterOpen(!rosterOpen)}>Saved roster <span>{unlocked ? "●" : "↗"}</span></button>
+          <div className="header-actions">
+            {draft.length > 0 && <button className="new-draft-button" aria-expanded={confirmingReset} onClick={() => setConfirmingReset(true)}>New draft</button>}
+            <button className="roster-button" aria-expanded={rosterOpen} onClick={() => setRosterOpen(!rosterOpen)}>Saved roster <span>{unlocked ? "●" : "↗"}</span></button>
+          </div>
         </header>
+        {confirmingReset && (
+          <section className="surface confirm-panel" aria-label="Start a new draft">
+            <div>
+              <h2>Start a new draft?</h2>
+              <p className="muted">This clears {draft.length} recorded {draft.length === 1 ? "ban or pick" : "bans and picks"}. Players, teams and filters stay.</p>
+            </div>
+            <div className="confirm-actions">
+              <button className="primary" onClick={clearDraft}>Clear draft</button>
+              <button ref={keepDraftButton} onClick={() => setConfirmingReset(false)}>Keep draft</button>
+            </div>
+          </section>
+        )}
         {rosterOpen && (
           <section className="surface roster-panel" aria-label="Saved roster">
             <div className="section-heading"><h2>Saved roster</h2>{unlocked && <button className="text-button" onClick={lockRoster}>Lock roster</button>}</div>
-            {unlocked ? <div className="roster-list">{roster.map((player) => <button key={player.id} disabled={players.some((entry) => entry.id === String(player.id)) || players.length >= 10} onClick={() => addPlayer(player.id, player.name)}>{player.name}<small>{player.id}</small><span>+</span></button>)}</div> : (
+            {unlocked ? <div className="roster-list">{roster.map((player) => <button key={player.id} disabled={players.some((entry) => entry.id === String(player.id)) || players.length >= MAX_PLAYERS} onClick={() => addPlayer(player.id, player.name)}>{player.name}<small>{player.id}</small><span>+</span></button>)}</div> : (
               <form className="add-form" onSubmit={(event) => {
                 event.preventDefault();
                 setUnlocked(password === "123451");
@@ -131,7 +180,7 @@ export default function App() {
         )}
         <div className="toolbar">
           <form className="add-form" onSubmit={(event) => { event.preventDefault(); addPlayer(input); }}>
-            <label className="sr-only" htmlFor="friend-id">Dota 2 Friend ID</label><input id="friend-id" inputMode="numeric" placeholder="Dota 2 Friend ID" value={input} onChange={(event) => setInput(event.target.value)} required /><button className="primary" disabled={players.length >= 10}>+ Add player</button>
+            <label className="sr-only" htmlFor="friend-id">Dota 2 Friend ID</label><input id="friend-id" inputMode="numeric" placeholder="Dota 2 Friend ID" value={input} onChange={(event) => setInput(event.target.value)} required /><button className="primary" disabled={players.length >= MAX_PLAYERS}>+ Add player</button>
           </form>
           <div className="hero-search"><label className="sr-only" htmlFor="hero-search">Find a hero</label><input id="hero-search" placeholder="Search any hero…" value={heroSearch} onChange={(event) => setHeroSearch(event.target.value)} />
             {heroSearch.trim() && <div className="search-results">{searchResults.map((hero) => <button key={hero.id} onClick={() => { setSelectedHero(hero.id); setHeroSearch(""); }}>{hero.localized_name}</button>)}{!searchResults.length && <span>No heroes found.</span>}</div>}
@@ -141,8 +190,8 @@ export default function App() {
         <section className="filter-bar" aria-label="History filters">
           <label className="range-filter"><span>Match history <b>Last {historySize}</b></span><input aria-label="Match history" type="range" min="0" max={HISTORY_SIZES.length - 1} value={historyIndex} onChange={(event) => setHistoryIndex(Number(event.target.value))} /></label>
           <label className="range-filter"><span>Recent window <b>Last {recentSize}</b></span><input aria-label="Recent window" type="range" min="5" max="50" step="5" value={recentSize} onChange={(event) => setRecentSize(Number(event.target.value))} /></label>
-          <label>Date range<select value={days} onChange={(event) => setDays(Number(event.target.value))}><option value="0">Any date</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="180">Last 180 days</option><option value="365">Last year</option></select></label>
-          <label>Min. games<select value={minimum} onChange={(event) => setMinimum(Number(event.target.value))}>{[1, 3, 5, 10, 20].map((n) => <option key={n}>{n}</option>)}</select></label>
+          <label>Date range<select value={days} onChange={(event) => setDays(Number(event.target.value))}>{DAY_OPTIONS.map((value) => <option key={value} value={value}>{DAY_LABELS[value]}</option>)}</select></label>
+          <label>Min. games<select value={minimum} onChange={(event) => setMinimum(Number(event.target.value))}>{MINIMUM_OPTIONS.map((n) => <option key={n}>{n}</option>)}</select></label>
         </section>
         <div className={`content-layout ${selectedHero !== null ? "with-inspector" : ""}`}>
           <div className="main-content">

@@ -2,22 +2,37 @@ import { useState } from "react";
 import HeroPortrait from "./HeroPortrait";
 import DraftInsights from "./DraftInsights";
 
+// Choosing in the dropdown only selects a hero; it's recorded with the Add button or
+// Enter in the filter. (On Windows, arrow keys or typing on a closed <select> fire
+// `change`, which used to record heroes by accident.)
 function DraftHeroSelect({ type, title, draft, catalog, onAction }) {
   const [search, setSearch] = useState("");
+  const [choice, setChoice] = useState("");
+  const label = title.toLowerCase();
+  const query = search.trim().toLowerCase();
   const full = type !== "ban" && draft.filter((action) => action.type === type).length >= 5;
   const available = Object.values(catalog).filter((hero) => !draft.some((action) => action.id === hero.id)
-    && hero.localized_name.toLowerCase().includes(search.trim().toLowerCase()))
+    && hero.localized_name.toLowerCase().includes(query))
     .sort((a, b) => a.localized_name.localeCompare(b.localized_name));
-  return <div className="draft-hero-select">
-    <input aria-label={`Search ${title.toLowerCase()}`} placeholder="Filter heroes..." value={search} disabled={full} onChange={(event) => setSearch(event.target.value)} />
-    <select aria-label={`Add to ${title.toLowerCase()}`} value="" disabled={full || !available.length} onChange={(event) => {
-      onAction(Number(event.target.value), type);
-      setSearch("");
-    }}>
-      <option value="" disabled>{full ? "Five picks recorded" : available.length ? "+ Select a hero" : "No heroes found"}</option>
-      {available.map((hero) => <option key={hero.id} value={hero.id}>{hero.localized_name}</option>)}
-    </select>
-  </div>;
+  // An explicit choice wins; otherwise a typed filter targets its first match.
+  const selected = available.find((hero) => String(hero.id) === choice) ?? (query ? available[0] : undefined);
+  function add(event) {
+    event.preventDefault();
+    if (full || !selected) return;
+    onAction(selected.id, type);
+    setSearch("");
+    setChoice("");
+  }
+  return <form className="draft-hero-select" onSubmit={add}>
+    <input aria-label={`Search ${label}`} placeholder="Filter heroes…" value={search} disabled={full} onChange={(event) => setSearch(event.target.value)} />
+    <div className="draft-hero-add">
+      <select aria-label={`Hero for ${label}`} value={selected ? String(selected.id) : ""} disabled={full || !available.length} onChange={(event) => setChoice(event.target.value)}>
+        <option value="" disabled>{full ? "Five picks recorded" : available.length ? "Select a hero" : "No heroes found"}</option>
+        {available.map((hero) => <option key={hero.id} value={hero.id}>{hero.localized_name}</option>)}
+      </select>
+      <button type="submit" aria-label={`Add to ${label}`} disabled={full || !selected}>Add</button>
+    </div>
+  </form>;
 }
 
 export default function DraftOverview({ draft, players, catalog, minimum, onHero, onRemove, onAction }) {

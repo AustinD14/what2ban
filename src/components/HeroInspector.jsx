@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { loadMatchups } from "../openDota";
+import { describeError, loadMatchups, peekMatchups } from "../openDota";
 import HeroPortrait from "./HeroPortrait";
 
 export default function HeroInspector({ id, catalog, draft, players, onAction, onClose, onHero }) {
@@ -7,7 +7,6 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
   const [minimum, setMinimum] = useState(100);
   const [direction, setDirection] = useState("difficult");
   const [attempt, setAttempt] = useState(0);
-  const cache = useRef(new Map());
   const title = useRef(null);
   const hero = catalog[id];
   const name = hero?.localized_name ?? `Hero ${id}`;
@@ -16,15 +15,16 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
   useEffect(() => {
     let active = true;
     title.current?.focus();
-    if (cache.current.has(id)) {
-      setResult({ status: "ready", data: cache.current.get(id) });
+    // Matchups are cached across inspector opens and reloads by openDota.js.
+    const cachedRows = peekMatchups(id);
+    if (cachedRows) {
+      setResult({ status: "ready", data: cachedRows });
     } else {
       setResult({ status: "loading", data: [] });
       loadMatchups(id).then((data) => {
-        cache.current.set(id, data);
         if (active) setResult({ status: "ready", data });
-      }).catch(() => {
-        if (active) setResult({ status: "error", data: [] });
+      }).catch((error) => {
+        if (active) setResult({ status: "error", data: [], message: describeError(error) });
       });
     }
     return () => { active = false; };
@@ -66,7 +66,7 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
       </div>
       <label className="inline-filter">Minimum matches <select value={minimum} onChange={(event) => setMinimum(Number(event.target.value))}>{[20, 50, 100, 250, 500].map((count) => <option key={count}>{count}</option>)}</select></label>
       {result.status === "loading" && <p role="status">Loading matchups…</p>}
-      {result.status === "error" && <div><p role="alert">Matchups couldn’t load.</p><button onClick={() => setAttempt(attempt + 1)}>Retry matchups</button></div>}
+      {result.status === "error" && <div><p role="alert">Matchups couldn’t load. {result.message}</p><button onClick={() => setAttempt(attempt + 1)}>Retry matchups</button></div>}
       {result.status === "ready" && !rows.length && <p className="muted">No matchups meet this sample size.</p>}
       <div className="matchup-list">
         {rows.map((row) => {
