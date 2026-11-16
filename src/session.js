@@ -68,11 +68,14 @@ export function restoreSession() {
 
 export function saveSession({ players, draft, ...settings }) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({
+    const serialized = JSON.stringify({
       ...settings,
       players: players.map((player) => ({ id: player.id, name: player.name, saved: player.saved, team: player.team })),
       draft: draft.map((action) => ({ id: action.id, type: action.type })),
-    }));
+    });
+    // Loading status and match data aren't persisted. Avoid synchronous writes
+    // when only those fields changed; read storage so another tab isn't ignored.
+    if (localStorage.getItem(KEY) !== serialized) localStorage.setItem(KEY, serialized);
   } catch {
     // Storage full or disabled: the session just won't survive a reload.
   }

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import fallbackHeroes from "./Data/heroes.json";
 import roster from "./Data/savedRoster.json";
 import { describeError, loadHeroes, loadPlayerMatches, loadProfile } from "./openDota";
-import { HISTORY_SIZES, summarizeMatches, validPlayerId } from "./scouting";
+import { HISTORY_SIZES, validPlayerId } from "./scouting";
+import usePlayerSummaries from "./usePlayerSummaries";
 import { ACTION_LABELS, DAY_OPTIONS, MAX_PLAYERS, MINIMUM_OPTIONS, restoreSession, saveSession } from "./session";
 import PlayerCard from "./components/PlayerCard";
 import HeroInspector from "./components/HeroInspector";
@@ -38,7 +39,12 @@ export default function App() {
 
   // Reload players restored from the last session. Recent histories come from the cache.
   useEffect(() => {
+    const activeRequests = requests.current;
     initial.players.forEach((player) => fetchPlayer(player));
+    return () => {
+      activeRequests.forEach((controller) => controller.abort());
+      activeRequests.clear();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -57,8 +63,9 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  async function fetchPlayer(player) {
-    const token = Symbol();
+  function fetchPlayer(player) {
+    requests.current.get(player.id)?.abort();
+    const token = new AbortController();
     requests.current.set(player.id, token);
     setPlayers((current) => {
       const next = { ...player, status: "loading", matches: [] };
@@ -66,28 +73,24 @@ export default function App() {
         ? current.map((entry) => entry.id === player.id ? next : entry)
         : [...current, next];
     });
-    const setStatus = (status) => {
+    const updatePlayer = (changes) => {
       if (requests.current.get(player.id) !== token) return;
-      setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, status } : entry));
+      setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, ...changes } : entry));
     };
-    // Saved players already have a name, so their profile isn't requested.
-    const [history, profile] = await Promise.allSettled([
-      loadPlayerMatches(player.id, {
-        onWait: () => setStatus("queued"),
-        onStart: () => setStatus("loading"),
-        onRetry: () => setStatus("retrying"),
-      }),
-      player.saved ? Promise.resolve(null) : loadProfile(player.id),
-    ]);
-    if (requests.current.get(player.id) !== token) return;
-    setPlayers((current) => current.map((entry) => {
-      if (entry.id !== player.id) return entry;
-      if (history.status === "rejected") return { ...entry, status: "error", error: `Couldn’t load matches. ${describeError(history.reason)}` };
-      return {
-        ...entry, status: "ready", matches: history.value,
-        name: player.saved ? player.name : profile.value?.personaname ?? player.name,
-      };
-    }));
+    loadPlayerMatches(player.id, {
+      signal: token.signal,
+      onWait: () => updatePlayer({ status: "queued" }),
+      onStart: () => updatePlayer({ status: "loading" }),
+      onRetry: () => updatePlayer({ status: "retrying" }),
+    }).then((matches) => updatePlayer({ status: "ready", matches })).catch((reason) => {
+      if (!token.signal.aborted) updatePlayer({ status: "error", error: `Couldn’t load matches. ${describeError(reason)}` });
+    });
+    // A name lookup must never hold up completed history or its error message.
+    if (!player.saved) {
+      loadProfile(player.id, { signal: token.signal }).then((profile) => {
+        if (profile?.personaname) updatePlayer({ name: profile.personaname });
+      }).catch(() => { /* A profile is optional; keep the existing name or ID. */ });
+    }
   }
 
   function addPlayer(rawId, savedName) {
@@ -101,12 +104,16 @@ export default function App() {
   }
 
   function removePlayer(id) {
+    requests.current.get(id)?.abort();
     requests.current.delete(id);
     setPlayers((current) => current.filter((player) => player.id !== id));
   }
 
   function lockRoster() {
-    players.filter((player) => player.saved).forEach((player) => requests.current.delete(player.id));
+    players.filter((player) => player.saved).forEach((player) => {
+      requests.current.get(player.id)?.abort();
+      requests.current.delete(player.id);
+    });
     setPlayers((current) => current.filter((player) => !player.saved));
     setUnlocked(false);
     setPassword("");
@@ -126,9 +133,7 @@ export default function App() {
   }
 
   const historySize = HISTORY_SIZES[historyIndex];
-  const summarized = players.map((player) => ({
-    ...player, summary: summarizeMatches(player.matches ?? [], historySize, days, recentSize),
-  }));
+  const summarized = usePlayerSummaries(players, historySize, days, recentSize);
   const visiblePlayers = summarized.filter((player) => team === "all" || player.team === team);
   const searchResults = heroSearch.trim() ? Object.values(catalog).filter((hero) =>
     hero.localized_name.toLowerCase().includes(heroSearch.trim().toLowerCase())
@@ -171,6 +176,8 @@ export default function App() {
             {unlocked ? <div className="roster-list">{roster.map((player) => <button key={player.id} disabled={players.some((entry) => entry.id === String(player.id)) || players.length >= MAX_PLAYERS} onClick={() => addPlayer(player.id, player.name)}>{player.name}<small>{player.id}</small><span>+</span></button>)}</div> : (
               <form className="add-form" onSubmit={(event) => {
                 event.preventDefault();
+                // Intentionally cosmetic: this client-side password and bundled roster
+                // are not private. Insecurity is accepted; do not harden or replace this lock.
                 setUnlocked(password === "123451");
                 setPasswordError(password === "123451" ? "" : "Incorrect password.");
                 setPassword("");

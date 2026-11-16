@@ -43,16 +43,32 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
   }
 
   // onWait fires (synchronously) if the request can't start right away; onStart fires when it later does.
-  function schedule(laneName, task, { onWait, onStart } = {}) {
+  function schedule(laneName, task, { onWait, onStart, signal } = {}) {
     const lane = state[laneName];
     return new Promise((resolve, reject) => {
       let waited = false;
+      const canceled = () => Object.assign(new Error("Request canceled."), { code: "ERR_CANCELED" });
+      if (signal?.aborted) { reject(canceled()); return; }
+      const cleanup = () => signal?.removeEventListener("abort", abort);
+      function abort() {
+        const index = lane.waiting.indexOf(job);
+        if (index < 0) return; // Running tasks receive the same signal via axios.
+        lane.waiting.splice(index, 1);
+        cleanup();
+        reject(canceled());
+      }
       const job = {
+        cancel() { cleanup(); reject(canceled()); },
         run(done) {
-          if (waited) onStart?.();
-          Promise.resolve().then(task).then(resolve, reject).finally(done);
+          cleanup();
+          Promise.resolve().then(() => {
+            if (signal?.aborted) throw canceled();
+            if (waited) onStart?.();
+            return task();
+          }).then(resolve, reject).finally(done);
         },
       };
+      signal?.addEventListener("abort", abort, { once: true });
       lane.waiting.push(job);
       pump();
       if (lane.waiting.includes(job)) {
@@ -69,7 +85,7 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
     generation += 1;
     for (const lane of Object.values(state)) {
       lane.active = 0;
-      lane.waiting.length = 0;
+      lane.waiting.splice(0).forEach((job) => job.cancel());
     }
   }
 

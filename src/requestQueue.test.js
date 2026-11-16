@@ -56,3 +56,29 @@ test("lanes share the per-minute budget and resume when the window frees up", as
     jest.useRealTimers();
   }
 });
+
+test('canceling queued work skips its task and preserves the next request', async () => {
+  const queue = createRequestQueue({ perMinute: 10, lanes: { history: 1 } });
+  const active = deferred();
+  const first = queue.schedule('history', () => active.promise);
+  const controller = new AbortController();
+  const removedTask = jest.fn();
+  const removed = queue.schedule('history', removedTask, { signal: controller.signal });
+  const rejection = expect(removed).rejects.toMatchObject({ code: 'ERR_CANCELED' });
+  const next = queue.schedule('history', () => 'next');
+  controller.abort();
+  await rejection;
+  active.resolve('first');
+  await expect(first).resolves.toBe('first');
+  await expect(next).resolves.toBe('next');
+  expect(removedTask).not.toHaveBeenCalled();
+});
+
+test('already canceled work never starts', async () => {
+  const queue = createRequestQueue({ perMinute: 10, lanes: { history: 1 } });
+  const controller = new AbortController();
+  controller.abort();
+  const task = jest.fn();
+  await expect(queue.schedule('history', task, { signal: controller.signal })).rejects.toMatchObject({ code: 'ERR_CANCELED' });
+  expect(task).not.toHaveBeenCalled();
+});

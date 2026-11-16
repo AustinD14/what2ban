@@ -28,6 +28,17 @@ const queue = createRequestQueue({
 const MATCH_FIELDS = ["match_id", "hero_id", "start_time", "player_slot", "radiant_win", "duration"];
 const HERO_FIELDS = ["id", "name", "localized_name", "roles"];
 const MATCHUP_FIELDS = ["hero_id", "games_played", "wins"];
+const positiveId = (value) => Number.isSafeInteger(value) && value > 0;
+const listOf = (validRow) => (value) => Array.isArray(value) && value.every(validRow);
+const validMatches = listOf((row) => row && positiveId(row.match_id) &&
+  Number.isInteger(row.hero_id) && row.hero_id >= 0 && Number.isFinite(row.start_time));
+const validHeroes = listOf((row) => row && positiveId(row.id) &&
+  typeof row.name === "string" && typeof row.localized_name === "string" &&
+  Array.isArray(row.roles) && row.roles.every((role) => typeof role === "string"));
+const validMatchups = listOf((row) => row && positiveId(row.hero_id) &&
+  Number.isInteger(row.games_played) && row.games_played >= 0 &&
+  Number.isInteger(row.wins) && row.wins >= 0 && row.wins <= row.games_played);
+const validProfile = (value) => value === null || (value && typeof value.personaname === "string");
 
 // TODO(rate limit): Loading several players has hit OpenDota's rate limit before
 // (cards failed and had to be retried after waiting a minute). Done so far:
@@ -35,7 +46,6 @@ const MATCHUP_FIELDS = ["hero_id", "games_played", "wins"];
 // with one automatic retry. Still to do:
 //   - on a 429, pause the queue and retry automatically instead of failing the card
 //   - add a "retry all failed players" action
-//   - drop queued requests for players removed before their turn
 //   - consider an OpenDota API key for higher limits (needs a small server or
 //     Firebase function so the key isn't shipped to the browser)
 
@@ -43,8 +53,8 @@ function pick(source, fields) {
   return Object.fromEntries(fields.filter((field) => source?.[field] !== undefined).map((field) => [field, source[field]]));
 }
 
-function request(path, { lane = "other", timeout = TIMEOUT.default, hooks } = {}) {
-  return queue.schedule(lane, async () => (await axios.get(API + path, { timeout })).data, hooks);
+function request(path, { lane = "other", timeout = TIMEOUT.default, hooks, signal } = {}) {
+  return queue.schedule(lane, async () => (await axios.get(API + path, { timeout, ...(signal ? { signal } : {}) })).data, { ...hooks, signal });
 }
 
 function checkList(data) {
@@ -59,9 +69,9 @@ export function isTimeout(error) {
 }
 
 // hooks: onWait (queued behind other requests), onStart (left the queue), onRetry (timed out, trying again).
-export function loadPlayerMatches(playerId, { onWait, onStart, onRetry } = {}) {
+export function loadPlayerMatches(playerId, { onWait, onStart, onRetry, signal } = {}) {
   const path = `/players/${playerId}/matches?limit=1000`;
-  const options = { lane: "history", timeout: TIMEOUT.history, hooks: { onWait, onStart } };
+  const options = { lane: "history", timeout: TIMEOUT.history, hooks: { onWait, onStart }, signal };
   return cached(`matches:${playerId}`, TTL.matches, async () => {
     let data;
     try {
@@ -73,27 +83,27 @@ export function loadPlayerMatches(playerId, { onWait, onStart, onRetry } = {}) {
       data = await request(path, options);
     }
     return checkList(data).map((match) => pick(match, MATCH_FIELDS));
-  });
+  }, { validate: validMatches, signal });
 }
 
-export function loadProfile(playerId) {
+export function loadProfile(playerId, { signal } = {}) {
   return cached(`profile:${playerId}`, TTL.profile, async () => {
-    const data = await request(`/players/${playerId}`);
-    return data?.profile ? { personaname: data.profile.personaname } : null;
-  });
+    const data = await request(`/players/${playerId}`, { signal });
+    return typeof data?.profile?.personaname === "string" ? { personaname: data.profile.personaname } : null;
+  }, { validate: validProfile, signal });
 }
 
 export function loadHeroes() {
-  return cached("heroes", TTL.heroes, async () => checkList(await request("/heroes")).map((hero) => pick(hero, HERO_FIELDS)));
+  return cached("heroes", TTL.heroes, async () => checkList(await request("/heroes")).map((hero) => pick(hero, HERO_FIELDS)), { validate: validHeroes });
 }
 
 export function loadMatchups(heroId) {
   return cached(`matchups:${heroId}`, TTL.matchups, async () =>
-    checkList(await request(`/heroes/${heroId}/matchups`)).map((row) => pick(row, MATCHUP_FIELDS)));
+    checkList(await request(`/heroes/${heroId}/matchups`)).map((row) => pick(row, MATCHUP_FIELDS)), { validate: validMatchups });
 }
 
 export function peekMatchups(heroId) {
-  return peek(`matchups:${heroId}`);
+  return peek(`matchups:${heroId}`, validMatchups);
 }
 
 export function resetRequestQueue() {

@@ -134,7 +134,7 @@ test("a slow match history gets a long timeout and one automatic retry", async (
   expect(await within(card).findByText("30 matches · 2 heroes")).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(attempts).toBe(2);
-  expect(axios.get).toHaveBeenCalledWith(expect.stringContaining("/matches?"), { timeout: 30000 });
+  expect(axios.get).toHaveBeenCalledWith(expect.stringContaining("/matches?"), expect.objectContaining({ timeout: 30000, signal: expect.any(AbortSignal) }));
 });
 
 test("players beyond the history concurrency limit wait in the queue", async () => {
@@ -254,7 +254,8 @@ test("failed history can be retried without duplicating the player", async () =>
   fireEvent.click(screen.getByRole("button", { name: "+ Add player" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn’t load matches");
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(await screen.findByRole("article", { name: "Recovered player" })).toBeInTheDocument();
+  const recovered = await screen.findByRole("article", { name: "Recovered player" });
+  expect(await within(recovered).findByText("30 matches · 2 heroes")).toBeInTheDocument();
   expect(screen.getAllByRole("article")).toHaveLength(1);
 });
 
@@ -282,7 +283,7 @@ test("a removed player's delayed response cannot add them back", async () => {
   fireEvent.change(screen.getByLabelText("Dota 2 Friend ID"), { target: { value: "150350373" } });
   fireEvent.click(screen.getByRole("button", { name: "+ Add player" }));
   await act(async () => {}); // let the queued request reach axios
-  fireEvent.click(screen.getByRole("button", { name: "Remove 150350373" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove Removed player" }));
   await act(async () => { resolveHistory({ data: matches }); });
   expect(screen.queryByRole("article")).not.toBeInTheDocument();
 });
@@ -337,4 +338,82 @@ test("matchups explain timeouts and are reused after the inspector closes", asyn
   render(<HeroInspector {...props} />);
   expect(screen.getByText("60%")).toBeInTheDocument();
   expect(axios.get).toHaveBeenCalledTimes(2);
+});
+
+test('history renders before the optional profile and survives a failed name lookup', async () => {
+  let rejectProfile;
+  axios.get.mockImplementation(async (url) => {
+    if (url.endsWith('/heroes')) return { data: [] };
+    if (url.includes('/matches?')) return { data: matches };
+    return new Promise((resolve, reject) => { rejectProfile = reject; });
+  });
+  await act(async () => { render(<App />); });
+  fireEvent.change(screen.getByLabelText('Dota 2 Friend ID'), { target: { value: '123' } });
+  fireEvent.click(screen.getByRole('button', { name: '+ Add player' }));
+  expect(await screen.findByText('30 matches · 2 heroes')).toBeInTheDocument();
+  await act(async () => { rejectProfile(new Error('Profile unavailable')); });
+  expect(screen.getByRole('article', { name: '123' })).toHaveTextContent('30 matches · 2 heroes');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('a late profile updates only the name and preserves history and team changes', async () => {
+  let finishProfile;
+  axios.get.mockImplementation(async (url) => {
+    if (url.endsWith('/heroes')) return { data: [] };
+    if (url.includes('/matches?')) return { data: matches };
+    return new Promise(resolve => { finishProfile = resolve; });
+  });
+  await act(async () => { render(<App />); });
+  fireEvent.change(screen.getByLabelText('Dota 2 Friend ID'), { target: { value: '123' } });
+  fireEvent.click(screen.getByRole('button', { name: '+ Add player' }));
+  await screen.findByText('30 matches · 2 heroes');
+  fireEvent.change(screen.getByLabelText('Team for 123'), { target: { value: 'us' } });
+  await act(async () => { finishProfile({ data: { profile: { personaname: 'Late name' } } }); });
+  expect(screen.getByLabelText('Team for Late name')).toHaveValue('us');
+  expect(screen.getByRole('article', { name: 'Late name' })).toHaveTextContent('30 matches · 2 heroes');
+});
+
+test('removing a queued player prevents its history request from starting', async () => {
+  const histories = [];
+  axios.get.mockImplementation(async (url) => {
+    if (url.includes('/matches?')) return new Promise(resolve => histories.push({ url, resolve }));
+    return { data: url.endsWith('/heroes') ? [] : {} };
+  });
+  await act(async () => { render(<App />); });
+  for (const id of ['101', '102', '103', '104', '105']) {
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Dota 2 Friend ID'), { target: { value: id } });
+      fireEvent.click(screen.getByRole('button', { name: '+ Add player' }));
+    });
+  }
+  expect(histories).toHaveLength(4);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove 105' }));
+  await act(async () => { histories.forEach(item => item.resolve({ data: matches })); });
+  expect(histories).toHaveLength(4);
+  expect(screen.queryByRole('article', { name: '105' })).not.toBeInTheDocument();
+});
+
+test('remove and re-add aborts old requests without canceling the new history', async () => {
+  const histories = [];
+  axios.get.mockImplementation(async (url, options) => {
+    if (url.includes('/matches?')) return new Promise(resolve => histories.push({ resolve, signal: options.signal }));
+    return { data: url.endsWith('/heroes') ? [] : {} };
+  });
+  let view;
+  await act(async () => { view = render(<App />); });
+  const add = async () => act(async () => {
+    fireEvent.change(screen.getByLabelText('Dota 2 Friend ID'), { target: { value: '123' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add player' }));
+  });
+  await add();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove 123' }));
+  expect(histories[0].signal.aborted).toBe(true);
+  await add();
+  expect(histories).toHaveLength(2);
+  expect(histories[1].signal.aborted).toBe(false);
+  await act(async () => { histories[1].resolve({ data: matches }); });
+  await act(async () => { histories[0].resolve({ data: [] }); });
+  expect(screen.getByRole('article', { name: '123' })).toHaveTextContent('30 matches · 2 heroes');
+  view.unmount();
+  expect(histories[1].signal.aborted).toBe(true);
 });

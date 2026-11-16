@@ -1,15 +1,15 @@
 // Response cache: an in-memory Map backed by localStorage, so cached data
-// survives a reload. Concurrent requests for the same key share one promise.
+// survives a reload. Requests with the same key and cancellation owner share a promise.
 const PREFIX = "what2ban:cache:";
 const memory = new Map();
 const pending = new Map();
 
-function readStored(key) {
+function readStored(key, validate) {
   try {
     const raw = localStorage.getItem(PREFIX + key);
     if (!raw) return undefined;
     const entry = JSON.parse(raw);
-    if (entry && entry.expires > Date.now()) return entry;
+    if (entry && Number.isFinite(entry.expires) && entry.expires > Date.now() && validate(entry.value)) return entry;
     localStorage.removeItem(PREFIX + key);
   } catch {
     // Storage unavailable or corrupt entry: treat as a miss.
@@ -48,30 +48,39 @@ function store(key, entry) {
   }
 }
 
-function fresh(key) {
-  const entry = memory.get(key) ?? readStored(key);
-  if (!entry || entry.expires <= Date.now()) return undefined;
+function fresh(key, validate) {
+  const inMemory = memory.get(key);
+  if (inMemory && inMemory.expires > Date.now() && validate(inMemory.value)) return inMemory;
+  memory.delete(key);
+  const entry = readStored(key, validate);
+  if (!entry) return undefined;
   memory.set(key, entry);
   return entry;
 }
 
-export function peek(key) {
-  return fresh(key)?.value;
+export function peek(key, validate = () => true) {
+  return fresh(key, validate)?.value;
 }
 
-export function cached(key, ttl, load) {
-  const hit = fresh(key);
+export function cached(key, ttl, load, { validate = () => true, signal } = {}) {
+  const canceled = () => Object.assign(new Error("Request canceled."), { code: "ERR_CANCELED" });
+  if (signal?.aborted) return Promise.reject(canceled());
+  const hit = fresh(key, validate);
   if (hit) return Promise.resolve(hit.value);
-  if (pending.has(key)) return pending.get(key);
+  // Independent cancellation owners must not share an abortable request.
+  const existing = pending.get(key);
+  if (existing && existing.signal === signal && !signal?.aborted) return existing.request;
   const request = load().then((value) => {
+    if (signal?.aborted) throw canceled();
+    if (!validate(value)) throw Object.assign(new Error("Invalid response."), { code: "INVALID_RESPONSE" });
     const entry = { expires: Date.now() + ttl, value };
     memory.set(key, entry);
     store(key, entry);
     return value;
   }).finally(() => {
-    if (pending.get(key) === request) pending.delete(key);
+    if (pending.get(key)?.request === request) pending.delete(key);
   });
-  pending.set(key, request);
+  pending.set(key, { request, signal });
   return request;
 }
 
