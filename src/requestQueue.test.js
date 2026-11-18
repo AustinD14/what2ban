@@ -82,3 +82,28 @@ test('already canceled work never starts', async () => {
   await expect(queue.schedule('history', task, { signal: controller.signal })).rejects.toMatchObject({ code: 'ERR_CANCELED' });
   expect(task).not.toHaveBeenCalled();
 });
+
+test('overlapping cooldowns cannot shorten a pause and the minute budget still applies', async () => {
+  jest.useFakeTimers('modern');
+  const queue = createRequestQueue({ perMinute: 1, lanes: { other: 1 } });
+  const listener = jest.fn();
+  const unsubscribe = queue.subscribe(listener);
+  try {
+    await queue.schedule('other', () => 'first');
+    queue.pause(20000);
+    queue.pause(10000);
+    const task = jest.fn(() => 'second');
+    const next = queue.schedule('other', task);
+    jest.advanceTimersByTime(20000);
+    await Promise.resolve();
+    expect(queue.getPauseUntil()).toBe(0);
+    expect(task).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(40000);
+    await expect(next).resolves.toBe('second');
+    expect(listener).toHaveBeenCalledTimes(3);
+  } finally {
+    unsubscribe();
+    queue.reset();
+    jest.useRealTimers();
+  }
+});

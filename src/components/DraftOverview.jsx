@@ -1,6 +1,8 @@
 import { useState } from "react";
 import HeroPortrait from "./HeroPortrait";
 import DraftInsights from "./DraftInsights";
+import LaneMatchups from './LaneMatchups';
+import useDraftMatchups from '../useDraftMatchups';
 
 // Choosing in the dropdown only selects a hero; it's recorded with the Add button or
 // Enter in the filter. (On Windows, arrow keys or typing on a closed <select> fire
@@ -36,6 +38,9 @@ function DraftHeroSelect({ type, title, draft, catalog, onAction }) {
 }
 
 export default function DraftOverview({ draft, players, catalog, minimum, onHero, onRemove, onAction }) {
+  const [selectedPlayer, setSelectedPlayer] = useState('');
+  const playerId = players.some(player => player.team === 'us' && String(player.id) === selectedPlayer) ? selectedPlayer : '';
+  const { results, samples, load } = useDraftMatchups(draft);
   const groups = [{ type: "ban", title: "Banned" }, { type: "us", title: "Your picks" }, { type: "them", title: "Opponent picks" }];
   const overlaps = new Map();
   for (const player of players) {
@@ -50,7 +55,8 @@ export default function DraftOverview({ draft, players, catalog, minimum, onHero
   const shared = [...overlaps.values()].filter((row) => row.us.length && row.them.length && !draft.some((action) => action.id === row.id));
   return (
     <div className="draft-overview">
-      <DraftInsights draft={draft} players={players} catalog={catalog} minimum={minimum} onHero={onHero} onAction={onAction} />
+      <DraftInsights draft={draft} players={players} catalog={catalog} minimum={minimum} onHero={onHero} onAction={onAction}
+        playerId={playerId} onPlayer={setSelectedPlayer} samples={samples} results={results} onLoad={load} />
       <div className="draft-board">
       <div className="draft-columns">
         {groups.map(({ type, title }) => (
@@ -67,6 +73,8 @@ export default function DraftOverview({ draft, players, catalog, minimum, onHero
           </section>
         ))}
       </div>
+      <LaneMatchups draft={draft} players={players} playerId={playerId} catalog={catalog} minimum={minimum}
+        results={results} onLoad={load} onHero={onHero} onAction={onAction} />
       <section className="surface overlap" aria-label="Shared hero pools">
         <div className="section-heading"><h2>Shared hero pools</h2><span className="muted">Available heroes played by both sides</span></div>
         {!shared.length && <p className="muted">No overlap in the loaded histories. Assign players to both teams to compare.</p>}

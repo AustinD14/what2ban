@@ -15,7 +15,7 @@ const DEFAULTS = {
   days: 0, minimum: 1, sort: "games", unlocked: false,
 };
 const ALLOWED = {
-  tab: ["scout", "draft"],
+  tab: ["scout", "draft", "meta"],
   view: ["pool", "matches"],
   team: ["all", ...PLAYER_TEAMS],
   historyIndex: HISTORY_SIZES.map((_, index) => index),

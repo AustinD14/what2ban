@@ -8,6 +8,8 @@ import { ACTION_LABELS, DAY_OPTIONS, MAX_PLAYERS, MINIMUM_OPTIONS, restoreSessio
 import PlayerCard from "./components/PlayerCard";
 import HeroInspector from "./components/HeroInspector";
 import DraftOverview from "./components/DraftOverview";
+import MetaOverview from "./components/MetaOverview";
+import RateLimitNotice from "./components/RateLimitNotice";
 
 const DAY_LABELS = { 0: "Any date", 30: "Last 30 days", 90: "Last 90 days", 180: "Last 180 days", 365: "Last year" };
 
@@ -141,18 +143,20 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <RateLimitNotice />
       <aside className="rail">
         <a className="brand" href="/" aria-label="What2Ban home" onClick={(event) => { event.preventDefault(); setTab("scout"); }}><span className="brand-mark">W<span>2</span></span><span>what2ban<span className="version">2.0</span></span></a>
         <span className="rail-label">WORKSPACE</span>
         <nav aria-label="Workspace">
           <button className={tab === "scout" ? "active" : ""} onClick={() => setTab("scout")}><span>◫</span> Player scouting <b>{players.length}</b></button>
           <button className={tab === "draft" ? "active" : ""} onClick={() => setTab("draft")}><span>◇</span> Draft overview <b>{draft.length}</b></button>
+          <button className={tab === "meta" ? "active" : ""} onClick={() => setTab("meta")}><span>↗</span> Meta</button>
         </nav>
         <div className="rail-bottom"><span className="live-dot" /> OpenDota data</div>
       </aside>
       <main className="workspace">
         <header className="page-header">
-          <div><span className="eyebrow">DOTA 2 / SCOUTING WORKSPACE</span><h1>{tab === "scout" ? "Player scouting" : "Draft overview"}</h1></div>
+          <div><span className="eyebrow">DOTA 2 / SCOUTING WORKSPACE</span><h1>{tab === "scout" ? "Player scouting" : tab === "meta" ? "Tournament meta" : "Draft overview"}</h1></div>
           <div className="header-actions">
             {draft.length > 0 && <button className="new-draft-button" aria-expanded={confirmingReset} onClick={() => setConfirmingReset(true)}>New draft</button>}
             <button className="roster-button" aria-expanded={rosterOpen} onClick={() => setRosterOpen(!rosterOpen)}>Saved roster <span>{unlocked ? "●" : "↗"}</span></button>
@@ -194,12 +198,12 @@ export default function App() {
           </div>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
-        <section className="filter-bar" aria-label="History filters">
+        {tab !== "meta" && <section className="filter-bar" aria-label="History filters">
           <label className="range-filter"><span>Match history <b>Last {historySize}</b></span><input aria-label="Match history" type="range" min="0" max={HISTORY_SIZES.length - 1} value={historyIndex} onChange={(event) => setHistoryIndex(Number(event.target.value))} /></label>
           <label className="range-filter"><span>Recent window <b>Last {recentSize}</b></span><input aria-label="Recent window" type="range" min="5" max="50" step="5" value={recentSize} onChange={(event) => setRecentSize(Number(event.target.value))} /></label>
           <label>Date range<select value={days} onChange={(event) => setDays(Number(event.target.value))}>{DAY_OPTIONS.map((value) => <option key={value} value={value}>{DAY_LABELS[value]}</option>)}</select></label>
           <label>Min. games<select value={minimum} onChange={(event) => setMinimum(Number(event.target.value))}>{MINIMUM_OPTIONS.map((n) => <option key={n}>{n}</option>)}</select></label>
-        </section>
+        </section>}
         <div className={`content-layout ${selectedHero !== null ? "with-inspector" : ""}`}>
           <div className="main-content">
             {tab === "scout" ? (
@@ -211,7 +215,7 @@ export default function App() {
                 {!visiblePlayers.length && <section className="empty-state"><span className="empty-symbol">◫</span><span className="eyebrow">PLAYERS</span><h2>{players.length ? "No players on this team" : "No players added"}</h2><p>{players.length ? "Change a player’s team using the selector on their card." : "Add a Friend ID or select a saved player."}</p></section>}
                 <div className="player-grid">{visiblePlayers.map((player) => <PlayerCard key={player.id} player={player} summary={player.summary} catalog={catalog} minimum={minimum} sort={sort} view={view} draft={draft} onHero={setSelectedHero} onTeam={(value) => setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, team: value } : entry))} onRemove={() => removePlayer(player.id)} onRetry={() => fetchPlayer(player)} />)}</div>
               </>
-            ) : <DraftOverview draft={draft} players={summarized} catalog={catalog} minimum={minimum} onHero={setSelectedHero} onAction={recordAction} onRemove={(id) => recordAction(id, null)} />}
+            ) : tab === "meta" ? <MetaOverview catalog={catalog} players={summarized} onHero={setSelectedHero} /> : <DraftOverview draft={draft} players={summarized} catalog={catalog} minimum={minimum} onHero={setSelectedHero} onAction={recordAction} onRemove={(id) => recordAction(id, null)} />}
           </div>
           {selectedHero !== null && <HeroInspector id={selectedHero} catalog={catalog} draft={draft} players={summarized} onAction={recordAction} onClose={() => setSelectedHero(null)} onHero={setSelectedHero} />}
         </div>

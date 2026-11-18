@@ -20,6 +20,22 @@ const addHero = (group, id) => {
   fireEvent.click(screen.getByRole("button", { name: `Add to ${group}` }));
 };
 const matchRequests = () => axios.get.mock.calls.filter(([url]) => url.includes("/matches?")).length;
+const ancientResponse = matchups => ({ data: { rows: [{ sample_size: 10000, oldest: now - 86400, newest: now,
+  matchups, baselines: [1, 2, 3, 5].map(hero_id => ({ hero_id, games: 1000, wins: hero_id <= 2 ? 500 : 200 })),
+}] } });
+
+test("Meta navigation loads tournaments only when opened and survives reload", async () => {
+  let view;
+  await act(async () => { view = render(<App />); });
+  expect(axios.get.mock.calls.some(([url]) => url.endsWith('/leagues'))).toBe(false);
+  axios.get.mockResolvedValue({ data: [{ leagueid: 42, name: 'Test Cup', tier: 'professional' }] });
+  fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
+  expect(await screen.findByRole('option', { name: /Test Cup/ })).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'History filters' })).not.toBeInTheDocument();
+  view.unmount();
+  await act(async () => { render(<App />); });
+  expect(screen.getByRole('heading', { name: 'Tournament meta' })).toBeInTheDocument();
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -29,7 +45,7 @@ beforeEach(() => {
   axios.get.mockImplementation(async (url) => {
     if (url.endsWith("/heroes")) return { data: [] };
     if (url.includes("/matches?")) return { data: matches };
-    if (url.includes("/matchups")) return { data: [{ hero_id: 5, games_played: 200, wins: 80 }] };
+    if (url.includes("/explorer")) return ancientResponse([{ hero_id: 5, games_played: 200, wins: 80 }]);
     return { data: { profile: { personaname: "Test player" } } };
   });
 });
@@ -170,16 +186,31 @@ test("a corrupt saved session is ignored instead of breaking the app", async () 
   expect(screen.getByRole("combobox", { name: /Min\. games/ })).toHaveValue("1");
 });
 
-test("a rate-limited history load says so", async () => {
+test("a rate-limited history waits, retries twice, then offers a manual retry", async () => {
+  jest.useFakeTimers('modern');
   axios.get.mockImplementation(async (url) => {
     if (url.endsWith("/heroes")) return { data: [] };
     if (url.includes("/matches?")) throw Object.assign(new Error("Request failed with status code 429"), { response: { status: 429 } });
     return { data: { profile: { personaname: "Busy player" } } };
   });
-  await act(async () => { render(<App />); });
-  fireEvent.change(screen.getByLabelText("Dota 2 Friend ID"), { target: { value: "150350373" } });
-  fireEvent.click(screen.getByRole("button", { name: "+ Add player" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn’t load matches. OpenDota’s rate limit was reached. Wait about a minute, then retry.");
+  let view;
+  try {
+    await act(async () => { view = render(<App />); });
+    fireEvent.change(screen.getByLabelText("Dota 2 Friend ID"), { target: { value: "150350373" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Add player" }));
+    await act(async () => {});
+    expect(screen.getByText(/OpenDota rate limit reached/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    for (let i = 0; i < 2; i += 1) {
+      await act(async () => { jest.advanceTimersByTime(60000); });
+    }
+    expect(screen.getByRole("alert")).toHaveTextContent("OpenDota’s rate limit is still active after automatic retries.");
+    expect(axios.get.mock.calls.filter(([url]) => url.includes('/matches?'))).toHaveLength(3);
+  } finally {
+    view?.unmount();
+    resetRequestQueue();
+    jest.useRealTimers();
+  }
 });
 
 test("an insight pick records a hero and updates lineup coverage", async () => {
@@ -307,8 +338,8 @@ test("shared pools respect minimum games, team membership and draft availability
 test("switching heroes ignores outdated matchup responses and enforces the five-pick limit", async () => {
   let resolveFirst;
   axios.get.mockImplementation(async (url) => {
-    if (url.includes("/1/matchups")) return new Promise((resolve) => { resolveFirst = resolve; });
-    return { data: [{ hero_id: 3, games_played: 200, wins: 120 }] };
+    if (decodeURIComponent(url).includes('WHERE 1 = ANY')) return new Promise((resolve) => { resolveFirst = resolve; });
+    return ancientResponse([{ hero_id: 3, games_played: 200, wins: 120 }]);
   });
   const props = {
     id: 1, catalog: { 1: { localized_name: "Anti-Mage" }, 2: { localized_name: "Axe" }, 3: { localized_name: "Bane" } },
@@ -318,14 +349,18 @@ test("switching heroes ignores outdated matchup responses and enforces the five-
   const { rerender } = render(<HeroInspector {...props} />);
   rerender(<HeroInspector {...props} id={2} />);
   expect(await screen.findByText("60%")).toBeInTheDocument();
-  await act(async () => { resolveFirst({ data: [{ hero_id: 3, games_played: 200, wins: 20 }] }); });
+  await act(async () => { resolveFirst(ancientResponse([{ hero_id: 3, games_played: 200, wins: 20 }])); });
   expect(screen.queryByText("10%")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Our pick" })).toBeDisabled();
 });
 
 test("matchups explain timeouts and are reused after the inspector closes", async () => {
-  axios.get.mockRejectedValueOnce(Object.assign(new Error("timeout of 12000ms exceeded"), { code: "ECONNABORTED" }));
-  axios.get.mockResolvedValue({ data: [{ hero_id: 3, games_played: 200, wins: 120 }] });
+  let attempts = 0;
+  axios.get.mockImplementation(async url => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' });
+    return ancientResponse([{ hero_id: 3, games_played: 200, wins: 120 }]);
+  });
   const props = {
     id: 1, catalog: { 1: { localized_name: "Anti-Mage" }, 3: { localized_name: "Bane" } },
     draft: [], players: [], onAction: jest.fn(), onHero: jest.fn(), onClose: jest.fn(),
@@ -335,8 +370,9 @@ test("matchups explain timeouts and are reused after the inspector closes", asyn
   fireEvent.click(screen.getByRole("button", { name: "Retry matchups" }));
   expect(await screen.findByText("60%")).toBeInTheDocument();
   unmount();
-  render(<HeroInspector {...props} />);
+  await act(async () => { render(<HeroInspector {...props} />); });
   expect(screen.getByText("60%")).toBeInTheDocument();
+  expect(attempts).toBe(2);
   expect(axios.get).toHaveBeenCalledTimes(2);
 });
 

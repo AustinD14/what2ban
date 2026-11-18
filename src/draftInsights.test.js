@@ -1,4 +1,5 @@
 import { getDraftInsights } from "./draftInsights";
+import heroes from './Data/heroes.json';
 
 const catalog = {
   1: { id: 1, localized_name: "Carry", roles: ["Carry"] },
@@ -10,10 +11,27 @@ const player = (team) => ({ name: team, team, summary: { heroes: [
   { id: 1, games: 30, recent: 10 }, { id: 2, games: 10, recent: 5 }, { id: 3, games: 2, recent: 1 },
 ] } });
 
+test('covering every role with Tiny and Bane keeps available generic picks eligible', () => {
+  const idFor = name => Object.values(heroes).find(hero => hero.localized_name === name).id;
+  const draft = ['Tiny', 'Bane'].map(name => ({ id: idFor(name), type: 'us' }));
+  const opponent = idFor('Axe');
+  const candidate = idFor('Anti-Mage');
+  draft.push({ id: opponent, type: 'them' });
+  const sample = { baselines: [opponent, candidate].map(hero_id => ({ hero_id, games: 1000, wins: 500 })),
+    matchups: [{ hero_id: candidate, games_played: 200, wins: 60 }] };
+  const result = getDraftInsights(draft, [], heroes, 1, { [opponent]: sample });
+  expect(result.ours.every(role => role.heroes.length > 0)).toBe(true);
+  expect(result.ourFull).toBe(false);
+  expect(result.picks).toHaveLength(4);
+  expect(result.picks[0].id).toBe(candidate);
+  expect(result.picks.every(row => row.fills.length === 0 && row.comfort.length === 0)).toBe(true);
+  expect(result.picks.some(row => draft.some(action => action.id === row.id))).toBe(false);
+});
+
 test("options follow draft coverage, team pools, filters and availability", () => {
   const players = [player("us"), player("them"), player("watch")];
   const before = getDraftInsights([], players, catalog, 1);
-  expect(before.picks[0].id).toBe(2);
+  expect(before.picks[0].id).toBe(1); // Established comfort now outweighs one extra role tag.
   expect(before.bans[0].id).toBe(2);
   const after = getDraftInsights([{ id: 2, type: "us" }, { id: 1, type: "ban" }], players, catalog, 1);
   expect(after.ours.find(({ role }) => role === "Disabler").heroes).toEqual(["Initiator"]);

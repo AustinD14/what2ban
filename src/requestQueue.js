@@ -8,6 +8,17 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
   let started = [];
   let timer = null;
   let generation = 0;
+  let pausedUntil = 0;
+  const listeners = new Set();
+  const notify = () => listeners.forEach(listener => listener());
+
+  function pause(milliseconds) {
+    pausedUntil = Math.max(pausedUntil, now() + milliseconds);
+    clearTimeout(timer);
+    timer = null;
+    notify();
+    pump();
+  }
 
   function budgetLeft() {
     const time = now();
@@ -16,9 +27,9 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
   }
 
   // Budget used up: try again when the oldest request leaves the one-minute window.
-  function wakeLater() {
+  function wakeLater(at) {
     if (timer) return;
-    timer = setTimeout(() => { timer = null; pump(); }, Math.max(0, started[0] + WINDOW - now()));
+    timer = setTimeout(() => { timer = null; pump(); }, Math.min(2147483647, Math.max(0, at - now())));
   }
 
   function start(lane) {
@@ -34,9 +45,11 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
   }
 
   function pump() {
+    if (pausedUntil > now()) { wakeLater(pausedUntil); return; }
+    if (pausedUntil) { pausedUntil = 0; notify(); }
     for (const lane of Object.values(state)) {
       while (lane.waiting.length && lane.active < lane.concurrency) {
-        if (budgetLeft() <= 0) { wakeLater(); return; }
+        if (budgetLeft() <= 0) { wakeLater(started[0] + WINDOW); return; }
         start(lane);
       }
     }
@@ -82,6 +95,8 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
     clearTimeout(timer);
     timer = null;
     started = [];
+    pausedUntil = 0;
+    notify();
     generation += 1;
     for (const lane of Object.values(state)) {
       lane.active = 0;
@@ -89,5 +104,6 @@ export function createRequestQueue({ perMinute, lanes, now = () => Date.now() })
     }
   }
 
-  return { schedule, reset };
+  return { schedule, reset, pause, getPauseUntil: () => pausedUntil,
+    subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); } };
 }
