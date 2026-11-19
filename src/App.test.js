@@ -27,14 +27,43 @@ const ancientResponse = matchups => ({ data: { rows: [{ sample_size: 10000, olde
 test("Meta navigation loads tournaments only when opened and survives reload", async () => {
   let view;
   await act(async () => { view = render(<App />); });
-  expect(axios.get.mock.calls.some(([url]) => url.endsWith('/leagues'))).toBe(false);
-  axios.get.mockResolvedValue({ data: [{ leagueid: 42, name: 'Test Cup', tier: 'professional' }] });
+  expect(axios.get.mock.calls.some(([url]) => url.includes('/explorer'))).toBe(false);
+  axios.get.mockResolvedValue({ data: { rows: [{ leagueid: 42, name: 'Test Cup', tier: 'premium', last_match_time: Date.now() / 1000 }] } });
   fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
   expect(await screen.findByRole('option', { name: /Test Cup/ })).toBeInTheDocument();
   expect(screen.queryByRole('region', { name: 'History filters' })).not.toBeInTheDocument();
   view.unmount();
   await act(async () => { render(<App />); });
   expect(screen.getByRole('heading', { name: 'Tournament meta' })).toBeInTheDocument();
+});
+
+test('Meta keeps its tournament, filters and loaded drafts across tab switches', async () => {
+  axios.get.mockImplementation(async url => {
+    if (url.endsWith('/heroes')) return { data: [] };
+    if (url.includes('/explorer')) return { data: { rows: [{ leagueid: 42, name: 'Test Cup', tier: 'premium', last_match_time: now }] } };
+    if (url.endsWith('/leagues/42/matches')) return { data: [{ match_id: 100 }] };
+    return { data: { match_id: 100, radiant_win: true, picks_bans: [
+      { hero_id: 20, is_pick: false, team: 0, order: 0 },
+      ...Array.from({ length: 10 }, (_, i) => ({ hero_id: i + 1, is_pick: true, team: i < 5 ? 0 : 1, order: i + 1 })),
+    ] } };
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
+  await screen.findByRole('option', { name: /Test Cup/ });
+  fireEvent.change(screen.getByLabelText('Find tournament'), { target: { value: 'Test' } });
+  fireEvent.change(screen.getByLabelText('Tournament'), { target: { value: '42' } });
+  await screen.findByText('Drafts available for 1 of 1 listed matches. 1 checked.');
+  fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'bans' } });
+  const calls = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: /Draft overview/ }));
+  expect(screen.queryByRole('region', { name: 'Tournament statistics' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
+  await act(async () => {});
+  expect(screen.getByLabelText('Tournament')).toHaveValue('42');
+  expect(screen.getByLabelText('Find tournament')).toHaveValue('Test');
+  expect(screen.getByLabelText('Sort by')).toHaveValue('bans');
+  expect(screen.getByText('Drafts available for 1 of 1 listed matches. 1 checked.')).toBeVisible();
+  expect(axios.get).toHaveBeenCalledTimes(calls);
 });
 
 beforeEach(() => {

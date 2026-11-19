@@ -1,7 +1,7 @@
 import axios from "axios";
 import { cached, peek } from "./cache";
 import { createRequestQueue } from "./requestQueue";
-import { hasCompleteDraft } from "./meta";
+import { hasCompleteDraft, RECENT_LEAGUES_QUERY } from "./meta";
 import { ancientMatchupQuery } from "./ancientMatchups";
 
 const API = "https://api.opendota.com/api";
@@ -182,7 +182,8 @@ export function loadAncientMatchups(heroId) {
   }, { validate: validAncient });
 }
 
-const validLeagues = listOf((row) => row && positiveId(row.leagueid) && typeof row.name === "string");
+const validLeagues = listOf((row) => row && positiveId(row.leagueid) && typeof row.name === "string"
+  && ['premium', 'professional'].includes(row.tier) && Number.isFinite(row.last_match_time) && row.last_match_time > 0);
 const validLeagueMatches = listOf((row) => row && positiveId(row.match_id));
 const validDraftMatch = (row) => row && positiveId(row.match_id) &&
   (row.radiant_win === null || typeof row.radiant_win === "boolean") &&
@@ -191,8 +192,12 @@ const validDraftMatch = (row) => row && positiveId(row.match_id) &&
     [0, 1].includes(action.team) && Number.isInteger(action.order) && action.order >= 0);
 
 export function loadLeagues({ signal } = {}) {
-  return cached("meta:leagues", DAY, async () => checkList(await request("/leagues", { signal }))
-    .map((row) => pick(row, ["leagueid", "name", "tier"])), { signal, validate: validLeagues });
+  // Separate key prevents the old all-time catalog from bypassing recency checks.
+  return cached("meta:recent-leagues:90d:v1", 60 * MINUTE, async () => {
+    const data = await request(`/explorer?sql=${encodeURIComponent(RECENT_LEAGUES_QUERY)}`, { signal, timeout: TIMEOUT.history });
+    if (data?.err || !Array.isArray(data?.rows)) throw Object.assign(new Error('Tournament list unavailable.'), { code: 'INVALID_RESPONSE' });
+    return data.rows.map(row => ({ leagueid: Number(row?.leagueid), name: row?.name, tier: row?.tier, last_match_time: Number(row?.last_match_time) }));
+  }, { signal, validate: validLeagues });
 }
 
 export function loadLeagueMatches(id, { signal } = {}) {

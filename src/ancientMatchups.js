@@ -2,6 +2,13 @@
 // One query produces both baselines and pair counts from exactly the same sample.
 // Bound the initial index scan: filtering the whole table exceeds Explorer's
 // timeout. Coverage is a recent sample, not a complete 30-day census.
+// Ancient+ is the average lobby rank, not a guarantee about every player.
+// lobby_type 7 + game_mode 22 restrict this to ranked All Pick (no Turbo or
+// unranked games). Scan the latest 250,000 available public matches, then keep
+// at most 50,000 eligible matches from the last 30 days. Actual coverage can be
+// much shorter; oldest/newest describe that window. Require a known result and
+// ten distinct, nonzero heroes to exclude incomplete team data.
+// Matchup wins belong to heroId, regardless of which side that hero played on.
 export function ancientMatchupQuery(heroId) {
   if (!Number.isSafeInteger(heroId) || heroId <= 0) throw new Error("Invalid hero ID");
   return `WITH recent AS (

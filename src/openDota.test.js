@@ -34,12 +34,21 @@ test('invalid API rows reject cleanly and are not cached', async () => {
 });
 
 test('tournament metadata is validated and reused', async () => {
-  axios.get.mockResolvedValueOnce({ data: [{ leagueid: 42, name: 'Cup', tier: 'professional', banner: 'unused' }] })
+  seed('meta:leagues', [{ leagueid: 99, name: 'Old catalog', tier: 'professional' }]);
+  axios.get.mockResolvedValueOnce({ data: { rows: [{ leagueid: '42', name: 'Cup', tier: 'professional', last_match_time: '1700000000', banner: 'unused' }] } })
     .mockResolvedValueOnce({ data: [{ match_id: 100, start_time: 1700000000, duration: 2000 }] });
-  expect(await loadLeagues()).toEqual([{ leagueid: 42, name: 'Cup', tier: 'professional' }]);
+  expect(await loadLeagues()).toEqual([{ leagueid: 42, name: 'Cup', tier: 'professional', last_match_time: 1700000000 }]);
+  await loadLeagues();
+  expect(decodeURIComponent(axios.get.mock.calls[0][0])).toContain('max(m.start_time)');
   expect(await loadLeagueMatches(42)).toEqual([{ match_id: 100, start_time: 1700000000 }]);
   await loadLeagueMatches(42);
   expect(axios.get).toHaveBeenCalledTimes(2);
+});
+
+test.each([{ err: 'Query failed', rows: [] }, { rows: [{ leagueid: 1, name: 'No date', tier: 'premium' }] }])('invalid recent tournament responses are not cached', async data => {
+  axios.get.mockResolvedValue({ data });
+  await expect(loadLeagues()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  expect(localStorage.getItem('what2ban:cache:meta:recent-leagues:90d:v1')).toBeNull();
 });
 
 test('complete drafts use long caching and retain only draft fields', async () => {

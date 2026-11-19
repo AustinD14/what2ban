@@ -258,9 +258,6 @@ input[type=range] { padding: 0; width: 100%; accent-color: #d57788; height: 16px
 .matchup-row > .matchup-score { flex: 0 0 auto; text-align: right; }
 .matchup-score > b { display: block; }
 .matchup-score > b + b { font-size: 11px; color: var(--muted); font-weight: 400; }
-.matchup-method { margin: 16px 0; }
-.matchup-method summary { color: var(--accent); font-size: 12px; cursor: pointer; }
-.matchup-method p { margin: 10px 0; }
 .rate-limit-notice { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; width: max-content; max-width: calc(100% - 32px); padding: 12px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: 0 4px 20px #00000060; font-size: 14px; }
 .recommend-player, .lane-controls > label:first-child { display: grid; gap: 6px; }
 .recommend-player select { width: 100%; }
@@ -275,3 +272,88 @@ input[type=range] { padding: 0; width: 100%; accent-color: #d57788; height: 16px
 .lane-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
 .lane-table th, .lane-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); }
 .lane-table td:nth-child(2), .lane-table td:nth-child(3) { white-space: nowrap; }
+
+/* Cover screens and unfolded touch devices use CSS viewport width, not physical
+   panel pixels or a device model. These overrides also cover split-screen and
+   rotation, without replacing the existing portrait desktop layout. */
+@media (max-width: 600px), (pointer: coarse) and (max-width: 1200px) {
+  .app-shell { display: block; min-height: 100dvh; }
+  .surface { min-width: 0; }
+  .rail { position: static; height: auto; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand { margin: 0; font-size: 18px; }
+  .rail-label, .rail-bottom { display: none; }
+  .rail nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 360px; gap: 6px; margin: 0; }
+  .rail nav button { justify-content: center; white-space: normal; text-align: center; font-size: 13px; padding: 10px 6px; gap: 5px; }
+  .rail nav button.active { border-radius: 8px; box-shadow: inset 0 -2px var(--accent); }
+  .workspace { padding: 20px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  button, select, input:not([type=checkbox]), .match-row, summary { min-height: 44px; }
+  input:not([type=checkbox]), select { font-size: 16px !important; }
+  .icon-button { min-width: 44px; flex-shrink: 0; }
+  summary { padding: 12px 0; }
+  .page-header { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .page-header > div { min-width: 0; }
+  .header-actions { justify-content: flex-start; }
+  .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+  .toolbar .add-form { flex-wrap: wrap; }
+  .add-form input { flex: 1 1 150px; width: 0; }
+  .hero-search { width: 100%; min-width: 0; }
+  .filter-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .filter-bar > label, .range-filter { min-width: 0; max-width: none; }
+  .range-filter span { flex-wrap: wrap; gap: 4px; }
+  .filter-bar select, .board-options select { max-width: 100%; }
+  .team-tabs { gap: 8px; }
+  .team-tabs button { padding: 10px 6px; font-size: 13px; }
+  .board-options { width: 100%; justify-content: space-between; }
+  .segmented button { font-size: 13px; }
+  .player-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+  .player-meta { flex-wrap: wrap; }
+  .player-meta > span, .player-footer { font-size: 12px; }
+  .recent-strip { overflow-x: auto; gap: 6px; padding-bottom: 12px; }
+  .recent-strip button { flex: 0 0 56px; min-height: 44px; }
+  .hero-row { font-size: 13px; }
+  .hero-label small, .hero-table-head { font-size: 10px; }
+  .content-layout.with-inspector { display: flex; flex-direction: column; }
+  .main-content { width: 100%; }
+  .inspector { order: -1; position: static; width: 100%; max-height: none; padding: 16px; }
+  .inspector-portrait { width: 240px; max-width: 100%; max-height: none; }
+  .inspector .matchup-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0 20px; }
+  .inspector .draft-actions { max-width: none; }
+  .matchup-row { font-size: 13px; }
+  .matchup-row > span { min-width: 0; overflow-wrap: anywhere; }
+  .matchup-row small { font-size: 11px; }
+  .draft-overview, .with-inspector .draft-overview { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .draft-insights, .with-inspector .draft-insights { order: 1; min-width: 0; }
+  .draft-columns { grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); }
+  .draft-item > button:first-child { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+  .overlap-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .meta-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+  .meta-controls label { min-width: 0; }
+  .meta-controls input, .meta-controls select, .lane-controls select { max-width: 100%; min-width: 0; }
+  .meta-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .meta-metrics > div { padding: 12px; }
+  .lane-controls > label:first-child { flex: 1 1 220px; min-width: 0; }
+  .lane-controls > label:last-child { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  .lane-controls input[type=checkbox] { width: 22px; height: 22px; flex-shrink: 0; }
+  .lane-table { min-width: 620px; }
+  .meta-table-scroll, .lane-table-wrap { max-width: 100%; overscroll-behavior-x: contain; }
+  .meta-table th:first-child, .meta-table td:first-child, .lane-table th:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+  .meta-hero span { max-width: 150px; }
+  .workspace-footer { flex-direction: column; gap: 8px; }
+  .rate-limit-notice { bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 600px) {
+  .rail nav { flex-basis: 100%; }
+  .rail nav button > span, .rail nav button b { display: none; }
+  .surface, .meta-picker, .meta-results, .lane-matchups { padding: 14px; }
+  .page-header { flex-direction: column; }
+  .header-actions { width: 100%; }
+  .header-actions button { flex: 1; justify-content: center; }
+  .player-header { padding: 14px 12px; gap: 8px; }
+  .player-meta { padding-right: 12px; padding-left: 12px; }
+  .hero-table-head, .hero-row { grid-template-columns: minmax(0, 1fr) 34px 40px 40px; padding-right: 10px; padding-left: 10px; gap: 4px; }
+  .hero-row .hero-portrait { width: 34px; height: 24px; }
+  .hero-row .hero-label { gap: 6px; }
+  .roster-list button { min-width: 0; width: 100%; }
+  .empty-state { min-height: 240px; }
+}

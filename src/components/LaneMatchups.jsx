@@ -35,7 +35,7 @@ export default function LaneMatchups({ draft, players, playerId, catalog, minimu
       <p className="muted small">Ancient+ average lobby rank · ranked All Pick · {result.sample.sample_size.toLocaleString()} sampled matches
         {result.sample.oldest && result.sample.newest ? ` · ${new Date(result.sample.oldest * 1000).toLocaleString()} – ${new Date(result.sample.newest * 1000).toLocaleString()}` : ''}.
         {' '}Top available options by adjusted advantage; at least 100 head-to-head games required. Positive means better than expected from the two heroes’ overall win rates.</p>
-      {rows.length ? <div className="lane-table-wrap"><table className="lane-table">
+      {rows.length ? <div className="lane-table-wrap" tabIndex="0" role="region" aria-label="Lane matchup table"><table className="lane-table">
         <thead><tr><th scope="col">Available pick</th><th scope="col">Advantage</th><th scope="col">Match win rate</th><th scope="col">Games</th><th scope="col">Comfort</th><th scope="col">Action</th></tr></thead>
         <tbody>{rows.map(hero => <tr key={hero.id}>
           <th scope="row"><button className="text-button" onClick={() => onHero(hero.id)}>{hero.localized_name}</button></th>

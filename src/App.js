@@ -19,6 +19,8 @@ export default function App() {
   const [catalog, setCatalog] = useState(fallbackHeroes);
   const [catalogError, setCatalogError] = useState(false);
   const [tab, setTab] = useState(initial.tab);
+  const [metaVisited, setMetaVisited] = useState(initial.tab === 'meta');
+  useEffect(() => { if (tab === 'meta') setMetaVisited(true); }, [tab]);
   const [view, setView] = useState(initial.view);
   const [team, setTeam] = useState(initial.team);
   const [historyIndex, setHistoryIndex] = useState(initial.historyIndex);
@@ -215,7 +217,10 @@ export default function App() {
                 {!visiblePlayers.length && <section className="empty-state"><span className="empty-symbol">◫</span><span className="eyebrow">PLAYERS</span><h2>{players.length ? "No players on this team" : "No players added"}</h2><p>{players.length ? "Change a player’s team using the selector on their card." : "Add a Friend ID or select a saved player."}</p></section>}
                 <div className="player-grid">{visiblePlayers.map((player) => <PlayerCard key={player.id} player={player} summary={player.summary} catalog={catalog} minimum={minimum} sort={sort} view={view} draft={draft} onHero={setSelectedHero} onTeam={(value) => setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, team: value } : entry))} onRemove={() => removePlayer(player.id)} onRetry={() => fetchPlayer(player)} />)}</div>
               </>
-            ) : tab === "meta" ? <MetaOverview catalog={catalog} players={summarized} onHero={setSelectedHero} /> : <DraftOverview draft={draft} players={summarized} catalog={catalog} minimum={minimum} onHero={setSelectedHero} onAction={recordAction} onRemove={(id) => recordAction(id, null)} />}
+            ) : tab === "meta" ? null : <DraftOverview draft={draft} players={summarized} catalog={catalog} minimum={minimum} onHero={setSelectedHero} onAction={recordAction} onRemove={(id) => recordAction(id, null)} />}
+            {(metaVisited || tab === 'meta') && <div hidden={tab !== 'meta'}>
+              <MetaOverview active={tab === 'meta'} catalog={catalog} players={summarized} onHero={setSelectedHero} />
+            </div>}
           </div>
           {selectedHero !== null && <HeroInspector id={selectedHero} catalog={catalog} draft={draft} players={summarized} onAction={recordAction} onClose={() => setSelectedHero(null)} onHero={setSelectedHero} />}
         </div>

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { describeError, isRateLimited, loadLeagues, loadLeagueMatches, loadDraftMatch } from "../openDota";
-import { summarizeTournament } from "../meta";
+import { summarizeTournament, filterRecentLeagues } from "../meta";
 import HeroPortrait from "./HeroPortrait";
 
 const BATCH = 20;
 const percent = value => value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 
-function Tournament({ league, catalog, players, onHero }) {
+function Tournament({ league, catalog, players, onHero, active }) {
   const [matches, setMatches] = useState(null);
   const [results, setResults] = useState({});
   const [limit, setLimit] = useState(BATCH);
@@ -17,6 +17,7 @@ function Tournament({ league, catalog, players, onHero }) {
   const [minimum, setMinimum] = useState(0);
   const [search, setSearch] = useState("");
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     const { signal } = controller;
     setBusy(true);
@@ -48,7 +49,7 @@ function Tournament({ league, catalog, players, onHero }) {
     return () => controller.abort();
     // Each run captures completed results; updates render progress without restarting work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league.leagueid, limit, attempt]);
+  }, [league.leagueid, limit, attempt, active]);
 
   const completed = Object.values(results).filter(row => row.data).map(row => row.data);
   const summary = useMemo(() => summarizeTournament(Object.values(results).filter(row => row.data).map(row => row.data)), [results]);
@@ -92,34 +93,41 @@ function Tournament({ league, catalog, players, onHero }) {
   </section>;
 }
 
-export default function MetaOverview({ catalog, players, onHero }) {
+export default function MetaOverview({ catalog, players, onHero, active = true }) {
   const [leagues, setLeagues] = useState([]);
   const [selected, setSelected] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const [days, setDays] = useState(90);
+  const [majorOnly, setMajorOnly] = useState(true);
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     setBusy(true); setError("");
     loadLeagues({ signal: controller.signal }).then(data => {
-      if (!controller.signal.aborted) setLeagues(data.filter(row => row.tier !== "amateur").sort((a, b) => b.leagueid - a.leagueid));
+      if (!controller.signal.aborted) setLeagues(data);
     }).catch(reason => { if (!controller.signal.aborted) setError(describeError(reason)); })
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
-  }, [attempt]);
-  const league = leagues.find(row => String(row.leagueid) === selected);
-  const filtered = leagues.filter(row => String(row.leagueid) === selected || row.name.toLowerCase().includes(search.trim().toLowerCase()));
+  }, [attempt, active]);
+  const filtered = filterRecentLeagues(leagues, { days, majorOnly, search });
+  const league = filtered.find(row => String(row.leagueid) === selected);
+  function changeFilter(update) { setSelected(''); update(); }
   return <div className="meta-overview">
     <section className="surface meta-picker" aria-label="Choose tournament">
       <h2>Professional tournament meta</h2><p className="muted">Explore which heroes teams prioritize, then compare them with your opponents’ pools.</p>
-      <div className="meta-controls"><label>Find tournament<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tournament names" /></label>
-        <label>Tournament<select value={selected} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">Select a tournament</option>{filtered.map(row => <option key={row.leagueid} value={row.leagueid}>{row.name} · {row.leagueid}</option>)}</select></label></div>
+      <div className="meta-controls">
+        <label>Activity<select value={days} onChange={event => changeFilter(() => setDays(Number(event.target.value)))}>{[30, 60, 90].map(value => <option key={value} value={value}>Last {value} days</option>)}</select></label>
+        <label>Events<select value={majorOnly ? 'major' : 'all'} onChange={event => changeFilter(() => setMajorOnly(event.target.value === 'major'))}><option value="major">Major event series</option><option value="all">All professional events</option></select></label>
+        <label>Find tournament<input value={search} onChange={event => changeFilter(() => setSearch(event.target.value))} placeholder="Search recent tournaments" /></label>
+        <label>Tournament<select value={league ? selected : ''} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">Select a tournament</option>{filtered.map(row => <option key={row.leagueid} value={row.leagueid}>{row.name} · {new Date(row.last_match_time * 1000).toLocaleDateString()}</option>)}</select></label></div>
       {busy && <p role="status">Loading tournaments…</p>}
       {error && <div><p role="alert" className="error">{error}</p><button onClick={() => setAttempt(value => value + 1)}>Retry tournaments</button></div>}
-      {!busy && !error && !filtered.length && <p>No tournaments found.</p>}
-      <p className="small muted">Listed by league ID, newest IDs first. Amateur leagues are excluded. Coverage depends on OpenDota.</p>
+      {!busy && !error && !filtered.length && <p>No recent tournaments match. Try All professional events or a wider activity window.</p>}
+      <p className="small muted">Latest match first. Major series is a name-based preset, not an official Tier 1 rating.</p>
     </section>
-    {league ? <Tournament key={league.leagueid} league={league} catalog={catalog} players={players} onHero={onHero} /> : <section className="empty-state"><span className="eyebrow">PRO PLAY</span><h2>See what makes the draft</h2><p>Select a tournament to explore picks, bans, win rates and early priorities.</p></section>}
+    {league ? <Tournament key={league.leagueid} league={league} catalog={catalog} players={players} onHero={onHero} active={active} /> : <section className="empty-state"><span className="eyebrow">PRO PLAY</span><h2>See what makes the draft</h2><p>Select a tournament to explore picks, bans, win rates and early priorities.</p></section>}
   </div>;
 }

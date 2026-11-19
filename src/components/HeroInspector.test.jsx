@@ -34,6 +34,4 @@ test('failed Ancient+ requests do not substitute pro data and can be retried', a
   fireEvent.click(screen.getByRole('button', { name: 'Retry matchups' }));
   expect(await screen.findByText('-20.0 pp')).toBeInTheDocument();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByText(/Ancient\+ average lobby rank/)).toBeInTheDocument();
-  expect(screen.getByText(/10,000 sampled public matches/)).toBeInTheDocument();
 });

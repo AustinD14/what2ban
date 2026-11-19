@@ -17,7 +17,11 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
   useEffect(() => {
     let active = true;
     title.current?.focus();
-    // Matchups are cached across inspector opens and reloads by openDota.js.
+    // One Ancient+ snapshot supplies both pair results and overall baselines;
+    // openDota.js reuses it across inspector opens and reloads for six hours.
+    // Scouting history filters and the Meta tournament do not alter this sample.
+    // Methodology lives in ancientMatchups.js and matchupAdvantage.js comments
+    // rather than explanatory banners in the hero card.
     const ready = sample => ({ status: "ready", data: sample.matchups, sample });
     const cachedRows = peekAncientMatchups(id);
     if (cachedRows) {
@@ -62,8 +66,6 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
       </div>
       <div className="inspector-divider" />
       <h3>Matchup explorer</h3>
-      <p className="small muted">Ancient+ average lobby rank · ranked All Pick · recent sample (up to 30 days old) · cached up to 6 hours. All numbers are from <strong>{name}’s</strong> perspective.</p>
-      {result.sample && <p className="small muted">{result.sample.sample_size.toLocaleString()} sampled public matches{result.sample.oldest !== null && result.sample.newest !== null && ` · ${new Date(result.sample.oldest * 1000).toLocaleDateString()} – ${new Date(result.sample.newest * 1000).toLocaleDateString()}`}. Uses up to the latest 50,000 eligible matches available from OpenDota, not every pub game.</p>}
       <label className="inline-filter">Rank by <select value={metric} onChange={event => setMetric(event.target.value)}><option value="advantage">Adjusted advantage</option><option value="winRate">Raw win rate</option></select></label>
       <div className="segmented">
         <button aria-pressed={direction === "difficult"} onClick={() => setDirection("difficult")}>{effectiveMetric === "advantage" ? "Countered by" : "Difficult"}</button>
@@ -91,8 +93,6 @@ export default function HeroInspector({ id, catalog, draft, players, onAction, o
           );
         })}
       </div>
-      <details className="matchup-method"><summary>How this ranking works</summary><p className="small muted">Adjusted advantage is observed win rate minus expected win rate, in percentage points (pp). Expected win rate uses both heroes’ overall win rates from exactly the same Ancient+ public-match sample: A × (1 − B) / [A × (1 − B) + (1 − A) × B]. Positive favors {name}; negative favors the opponent. Ancient+ refers to average lobby rank, not every player. Unknown ranks, unranked games and Turbo are excluded. We inspect the latest 250,000 public matches available from OpenDota and use up to 50,000 qualifying matches no older than 30 days. The actual date range above may be much shorter. This is our estimate, not Dotabuff’s formula. It does not adjust for lanes, teammates or patch changes; small samples remain noisy.</p></details>
-      <p className="small muted">Scouting filters and the Meta tournament do not change this sample.</p>
     </aside>
   );
 }

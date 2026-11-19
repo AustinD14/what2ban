@@ -1,3 +1,30 @@
+export const RECENT_TOURNAMENT_DAYS = 90;
+
+// League IDs are registration order, not event dates. One indexed, aggregated
+// query finds active tournaments without requesting each league's match list.
+export const RECENT_LEAGUES_QUERY = `SELECT l.leagueid, l.name, l.tier, max(m.start_time) AS last_match_time
+  FROM matches m JOIN leagues l ON l.leagueid = m.leagueid
+  WHERE m.start_time >= extract(epoch from now()) - ${RECENT_TOURNAMENT_DAYS} * 86400
+    AND m.start_time <= extract(epoch from now())
+    AND l.tier IN ('premium', 'professional')
+  GROUP BY l.leagueid, l.name, l.tier ORDER BY last_match_time DESC`;
+
+// OpenDota's premium/professional labels are not Tier 1 classifications.
+// This discoverability preset is deliberately name-based, not an asserted tier.
+export function isMajorEvent(league) {
+  if (/qualif|division\s*(?:2|ii)\b|challenger|open\s+stage/i.test(league.name)) return false;
+  return league.tier === 'premium' || /\b(the international|dreamleague|esl one|pgl wallachia|blast\s+(?:dota\s+)?slam|riyadh masters|esports world cup|fissure universe)\b/i.test(league.name);
+}
+
+export function filterRecentLeagues(leagues, { days = RECENT_TOURNAMENT_DAYS, majorOnly = true, search = '', now = Date.now() } = {}) {
+  const cutoff = now / 1000 - days * 86400;
+  const query = search.trim().toLowerCase();
+  return leagues.filter(row => ['premium', 'professional'].includes(row.tier)
+    && Number.isFinite(row.last_match_time) && row.last_match_time >= cutoff && row.last_match_time <= now / 1000
+    && (!majorOnly || isMajorEvent(row)) && row.name.toLowerCase().includes(query))
+    .sort((a, b) => b.last_match_time - a.last_match_time || b.leagueid - a.leagueid);
+}
+
 // Only complete, distinct drafts contribute to denominators. Early priority is
 // deliberately defined as the first four actions, not a patch-dependent phase.
 export function hasCompleteDraft(match) {
