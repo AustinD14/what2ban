@@ -37,7 +37,7 @@ function DraftHeroSelect({ type, title, draft, catalog, onAction }) {
   </form>;
 }
 
-export default function DraftOverview({ draft, players, catalog, minimum, onHero, onRemove, onAction }) {
+export default function DraftOverview({ draft, players, catalog, minimum, onHero, onRemove, onAction, meta = null }) {
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const playerId = players.some(player => player.team === 'us' && String(player.id) === selectedPlayer) ? selectedPlayer : '';
   const { results, samples, load } = useDraftMatchups(draft);
@@ -56,7 +56,7 @@ export default function DraftOverview({ draft, players, catalog, minimum, onHero
   return (
     <div className="draft-overview">
       <DraftInsights draft={draft} players={players} catalog={catalog} minimum={minimum} onHero={onHero} onAction={onAction}
-        playerId={playerId} onPlayer={setSelectedPlayer} samples={samples} results={results} onLoad={load} />
+        playerId={playerId} onPlayer={setSelectedPlayer} samples={samples} results={results} onLoad={load} meta={meta} />
       <div className="draft-board">
       <div className="draft-columns">
         {groups.map(({ type, title }) => (

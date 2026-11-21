@@ -1,4 +1,4 @@
-import { recommendationEvidence } from './draftRecommendations';
+import { recommendationEvidence, comfortPlayers, tournamentEvidence, usableTournamentMeta } from './draftRecommendations';
 
 export const DRAFT_ROLES = [
   { role: "Initiator", label: "Initiation" },
@@ -10,7 +10,7 @@ export const DRAFT_ROLES = [
   { role: "Support", label: "Support" },
 ];
 
-export function getDraftInsights(draft, players, catalog, minimum, samples = {}, playerId = '') {
+export function getDraftInsights(draft, players, catalog, minimum, samples = {}, playerId = '', meta = null) {
   const selectedPlayers = playerId ? players.filter(player => String(player.id) === playerId || player.team !== 'us') : players;
   const unavailable = new Set(draft.map(({ id }) => id));
   const coverage = (team) => DRAFT_ROLES.map((entry) => ({
@@ -34,10 +34,7 @@ export function getDraftInsights(draft, players, catalog, minimum, samples = {},
     }
     return [...result.values()];
   };
-  const rank = (rows, roles) => rows.map((row) => ({
-    ...row,
-    fills: roles.filter((entry) => !entry.heroes.length && catalog[row.id]?.roles?.includes(entry.role)).map(({ label }) => label),
-  })).sort((a, b) => b.fills.length - a.fills.length || b.recent - a.recent || b.games - a.games || a.id - b.id).slice(0, 4);
+  const sortOptions = rows => rows.sort((a, b) => b.score - a.score || b.games - a.games || a.id - b.id).slice(0, 4);
   const ourPool = pool("us");
   const hasOurHistory = selectedPlayers.some((player) => player.team === "us" && player.summary.heroes.length);
   const full = (team) => draft.filter((action) => action.type === team).length >= 5;
@@ -49,13 +46,27 @@ export function getDraftInsights(draft, players, catalog, minimum, samples = {},
   const picks = (hasOurHistory ? ourPool : generic).map(row => {
     const fills = ours.filter(entry => !entry.heroes.length && catalog[row.id]?.roles?.includes(entry.role)).map(entry => entry.label);
     const evidence = recommendationEvidence(row.id, selectedPlayers, minimum, opponents, samples);
-    return { ...row, ...evidence, fills,
-      score: (evidence.comfort[0]?.score ?? 0) + Math.min(3, fills.length) * 5 + evidence.matchupScore };
-  }).sort((a, b) => b.score - a.score || b.games - a.games || a.id - b.id).slice(0, 4);
+    const tournament = tournamentEvidence(row.id, meta);
+    // Broad tags are a tie-breaker, not additive evidence of several jobs filled.
+    const roleScore = fills.length ? 2 : 0;
+    const comfortScore = evidence.comfort[0]?.score ?? 0;
+    return { ...row, ...evidence, ...tournament, fills, roleScore, comfortScore,
+      score: comfortScore + roleScore + evidence.matchupScore + tournament.metaScore };
+  });
+  const bans = pool('them').map(row => {
+    const fills = full('them') ? [] : theirs.filter(entry => !entry.heroes.length && catalog[row.id]?.roles?.includes(entry.role)).map(entry => entry.label);
+    const tournament = tournamentEvidence(row.id, meta);
+    const comfort = comfortPlayers(row.id, players, minimum, 'them');
+    const roleScore = fills.length ? 2 : 0;
+    const comfortScore = comfort[0]?.score ?? 0;
+    return { ...row, ...tournament, fills, comfort, roleScore, comfortScore,
+      score: comfortScore + roleScore + tournament.metaScore };
+  });
   return {
+    metaAvailable: usableTournamentMeta(meta),
     ours, theirs, genericPicks: !hasOurHistory,
-    picks: full("us") ? [] : picks,
-    bans: rank(pool("them"), full("them") ? [] : theirs),
+    picks: full("us") ? [] : sortOptions(picks),
+    bans: sortOptions(bans),
     ourFull: full("us"),
   };
 }

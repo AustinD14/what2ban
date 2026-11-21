@@ -32,7 +32,7 @@ test("options follow draft coverage, team pools, filters and availability", () =
   const players = [player("us"), player("them"), player("watch")];
   const before = getDraftInsights([], players, catalog, 1);
   expect(before.picks[0].id).toBe(1); // Established comfort now outweighs one extra role tag.
-  expect(before.bans[0].id).toBe(2);
+  expect(before.bans[0].id).toBe(1); // Opponent comfort also outweighs broad role tags.
   const after = getDraftInsights([{ id: 2, type: "us" }, { id: 1, type: "ban" }], players, catalog, 1);
   expect(after.ours.find(({ role }) => role === "Disabler").heroes).toEqual(["Initiator"]);
   expect(after.picks.map(({ id }) => id)).toEqual([3]);

@@ -6,7 +6,7 @@ import HeroPortrait from "./HeroPortrait";
 const BATCH = 20;
 const percent = value => value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 
-function Tournament({ league, catalog, players, onHero, active }) {
+function Tournament({ league, catalog, players, onHero, active, onMetaChange }) {
   const [matches, setMatches] = useState(null);
   const [results, setResults] = useState({});
   const [limit, setLimit] = useState(BATCH);
@@ -53,6 +53,11 @@ function Tournament({ league, catalog, players, onHero, active }) {
 
   const completed = Object.values(results).filter(row => row.data).map(row => row.data);
   const summary = useMemo(() => summarizeTournament(Object.values(results).filter(row => row.data).map(row => row.data)), [results]);
+  // Share complete drafts already loaded by the user. Recommendation consumers
+  // never fetch their own tournament data or use the table's display filters.
+  useEffect(() => {
+    onMetaChange?.({ leagueid: league.leagueid, name: league.name, last_match_time: league.last_match_time, ...summary });
+  }, [league.leagueid, league.name, league.last_match_time, summary, onMetaChange]);
   const failed = Object.values(results).filter(row => row.failed).length;
   const rows = summary.rows.filter(row => row.picks >= minimum &&
     (catalog[row.id]?.localized_name ?? `Hero ${row.id}`).toLowerCase().includes(search.trim().toLowerCase()))
@@ -93,7 +98,7 @@ function Tournament({ league, catalog, players, onHero, active }) {
   </section>;
 }
 
-export default function MetaOverview({ catalog, players, onHero, active = true }) {
+export default function MetaOverview({ catalog, players, onHero, active = true, onMetaChange }) {
   const [leagues, setLeagues] = useState([]);
   const [selected, setSelected] = useState("");
   const [search, setSearch] = useState("");
@@ -114,6 +119,7 @@ export default function MetaOverview({ catalog, players, onHero, active = true }
   }, [attempt, active]);
   const filtered = filterRecentLeagues(leagues, { days, majorOnly, search });
   const league = filtered.find(row => String(row.leagueid) === selected);
+  useEffect(() => { if (!league) onMetaChange?.(null); }, [league, onMetaChange]);
   function changeFilter(update) { setSelected(''); update(); }
   return <div className="meta-overview">
     <section className="surface meta-picker" aria-label="Choose tournament">
@@ -128,6 +134,6 @@ export default function MetaOverview({ catalog, players, onHero, active = true }
       {!busy && !error && !filtered.length && <p>No recent tournaments match. Try All professional events or a wider activity window.</p>}
       <p className="small muted">Latest match first. Major series is a name-based preset, not an official Tier 1 rating.</p>
     </section>
-    {league ? <Tournament key={league.leagueid} league={league} catalog={catalog} players={players} onHero={onHero} active={active} /> : <section className="empty-state"><span className="eyebrow">PRO PLAY</span><h2>See what makes the draft</h2><p>Select a tournament to explore picks, bans, win rates and early priorities.</p></section>}
+    {league ? <Tournament key={league.leagueid} league={league} catalog={catalog} players={players} onHero={onHero} active={active} onMetaChange={onMetaChange} /> : <section className="empty-state"><span className="eyebrow">PRO PLAY</span><h2>See what makes the draft</h2><p>Select a tournament to explore picks, bans, win rates and early priorities.</p></section>}
   </div>;
 }

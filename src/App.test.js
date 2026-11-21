@@ -79,6 +79,35 @@ beforeEach(() => {
   });
 });
 
+test('loaded tournament meta reaches Draft and is cleared when its selection is removed', async () => {
+  axios.get.mockImplementation(async url => {
+    if (url.endsWith('/heroes')) return { data: [] };
+    if (url.includes('/explorer')) return { data: { rows: [{ leagueid: 42, name: 'Test Cup', tier: 'premium', last_match_time: now }] } };
+    if (url.endsWith('/leagues/42/matches')) return { data: Array.from({ length: 5 }, (_, i) => ({ match_id: i + 100 })) };
+    return { data: { match_id: Number(url.split('/').pop()), radiant_win: true, picks_bans: [
+      { hero_id: 20, is_pick: false, team: 0, order: 0 },
+      ...Array.from({ length: 10 }, (_, i) => ({ hero_id: i + 1, is_pick: true, team: i < 5 ? 0 : 1, order: i + 1 })),
+    ] } };
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
+  await screen.findByRole('option', { name: /Test Cup/ });
+  fireEvent.change(screen.getByLabelText('Tournament'), { target: { value: '42' } });
+  await screen.findByText('Drafts available for 5 of 5 listed matches. 5 checked.');
+  // Display filters must not change the shared tournament statistics.
+  fireEvent.change(screen.getByLabelText('Find hero'), { target: { value: 'nonexistent' } });
+  const calls = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: /Draft overview/ }));
+  expect(screen.getByText('Meta: Test Cup · 5 complete drafts')).toBeVisible();
+  expect(within(screen.getByRole('complementary', { name: 'Draft insights' })).getAllByText(/in 5 tournament drafts/).length).toBeGreaterThan(0);
+  expect(axios.get).toHaveBeenCalledTimes(calls);
+  fireEvent.click(screen.getByRole('button', { name: /Meta/ }));
+  await act(async () => {});
+  fireEvent.change(screen.getByLabelText('Tournament'), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: /Draft overview/ }));
+  expect(screen.queryByText('Meta: Test Cup · 5 complete drafts')).not.toBeInTheDocument();
+});
+
 test("draft dropdowns add, exclude used heroes, undo and enforce five picks", async () => {
   await act(async () => { render(<App />); });
   fireEvent.click(screen.getByRole("button", { name: /Draft overview/ }));

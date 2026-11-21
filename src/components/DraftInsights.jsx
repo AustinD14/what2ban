@@ -2,8 +2,8 @@ import { getDraftInsights } from "../draftInsights";
 import HeroPortrait from "./HeroPortrait";
 import { signedPoints } from '../draftRecommendations';
 
-export default function DraftInsights({ draft, players, catalog, minimum, onHero, onAction, samples = {}, results = {}, playerId = '', onPlayer, onLoad }) {
-  const insights = getDraftInsights(draft, players, catalog, minimum, samples, playerId);
+export default function DraftInsights({ draft, players, catalog, minimum, onHero, onAction, samples = {}, results = {}, playerId = '', onPlayer, onLoad, meta = null }) {
+  const insights = getDraftInsights(draft, players, catalog, minimum, samples, playerId, meta);
   const opponents = draft.filter(action => action.type === 'them');
   function options(rows, type) {
     return rows.map((row) => (
@@ -12,13 +12,14 @@ export default function DraftInsights({ draft, players, catalog, minimum, onHero
           <HeroPortrait hero={catalog[row.id]} /><strong>{catalog[row.id].localized_name}</strong>
         </button>
         {!!row.fills.length && <p>{type === "us" ? "Adds" : "Would give opponents"}: {row.fills.join(", ").toLowerCase()}.</p>}
+        {row.tournament && <small>{row.tournament.picks} picks · {row.tournament.bans} bans in {row.tournament.analyzed} tournament drafts</small>}
         {type === 'us' ? <>
           {row.comfort.map(player => <small key={player.id ?? player.name}>{player.name}: {player.games} games, {player.recent} recent · {player.decided ? `${Math.round(player.wins / player.decided * 100)}% wins in ${player.decided} decided games` : 'Win rate unavailable'}</small>)}
           {row.matchups.map(match => <small key={match.opponent}>{signedPoints(match.advantage)} vs {catalog[match.opponent]?.localized_name ?? match.opponent} · {match.games.toLocaleString()} games</small>)}
           {!!opponents.length && <small>{row.matchups.length}/{opponents.length} opponents with usable matchup data (100+ games).</small>}
           <details><summary>Why this pick?</summary>
-            <p>{row.comfort.length ? `Comfort score uses ${row.comfort[0].name}'s history; other teammates' games are not added to their score.` : 'No qualifying player history. This is a general role and matchup option.'}</p>
-            <p>{row.fills.length ? `Fills missing role tags: ${row.fills.join(', ')}.` : 'Does not add a missing role tag.'}</p>
+            <p>{row.comfort.length ? `${row.comfort[0].name}: this hero makes up ${Math.round(row.comfort[0].share * 100)}% of their filtered games.` : 'No qualifying player history. This is a general meta and matchup option.'}</p>
+            <p>Player comfort {row.comfortScore.toFixed(1)} · Tournament meta {row.metaScore.toFixed(1)} · Matchups {row.matchupScore.toFixed(1)} · Role coverage {row.roleScore}</p>
             <p>{row.advantage === null ? 'Matchup strength is unknown and adds no points.' : `Average adjusted advantage: ${signedPoints(row.advantage)} across the opponents shown. Missing matchups add no points.`}</p>
             <p>Recommendation score: {row.score.toFixed(1)}. This is a ranking aid, not a predicted win rate.</p>
           </details>
@@ -39,6 +40,7 @@ export default function DraftInsights({ draft, players, catalog, minimum, onHero
       ))}</div>
       <p className="muted small">Based on hero role tags. Items, lanes and ability details can change coverage.</p>
       <h3>Pick options</h3>
+      <p className="muted small">{insights.metaAvailable ? `Meta: ${meta.name} · ${meta.analyzed} complete drafts` : meta && meta.analyzed < 5 ? `Meta: ${meta.name} needs at least 5 complete drafts.` : 'Select and load a recent tournament in Meta to include pro pick/ban priority.'}</p>
       <label className="recommend-player">Recommend for<select aria-label="Recommend for" value={playerId} onChange={event => onPlayer?.(event.target.value)}>
         <option value="">Anyone on your team</option>
         {players.filter(player => player.team === 'us').map(player => <option key={player.id ?? player.name} value={player.id ?? player.name}>{player.name}</option>)}
@@ -54,18 +56,14 @@ export default function DraftInsights({ draft, players, catalog, minimum, onHero
         </div>)}
       </div>}
       {insights.ourFull ? <p className="muted small">Five picks recorded.</p> : <>
-        <p className="muted small">{insights.genericPicks ? "General role and loaded matchup options. Load your team's histories for comfort picks." : "Comfort picks balance experience, recent use, win record, missing roles and loaded opponent matchups. History filters apply."}</p>
+        <p className="muted small">{insights.genericPicks ? "Load your team's histories for player-specific picks." : "Your team's comfort heroes, weighted by tournament priority and loaded matchups."}</p>
         {options(insights.picks, "us")}
         {!insights.picks.length && <p className="muted small">No available options match the current filters.</p>}
       </>}
       <h3>Ban options</h3>
-      <p className="muted small">Opponent pools, sorted by their missing roles, recent games, then total games.</p>
+      <p className="muted small">Opponent comfort heroes, weighted by tournament priority.</p>
       {options(insights.bans, "ban")}
       {!insights.bans.length && <p className="muted small">No available opponent heroes in the loaded histories. Add opponents or adjust the history filters.</p>}
-      <details className="muted small"><summary>How pick ranking works</summary>
-        <p>Experience: up to 35 points on a logarithmic scale, capped at 50 games. Recent use: 2 points per game, capped at 20. Win record: up to 15 points, using (wins + 5) / (decided games + 10) to reduce small-sample swings. The highest-scoring eligible teammate supplies the comfort score.</p>
-        <p>Missing role tags add 5 points each, capped at 15. Average adjusted matchup advantage adds 2 points per percentage point, capped at ±15. Only loaded matchups with at least 100 games count. These whole-match results do not measure lane wins or predict a five-hero lineup's win rate.</p>
-      </details>
     </aside>
   );
 }

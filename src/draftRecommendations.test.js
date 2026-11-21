@@ -1,4 +1,4 @@
-import { candidateMatchup, comfortPlayers } from './draftRecommendations';
+import { candidateMatchup, comfortPlayers, tournamentEvidence } from './draftRecommendations';
 import { getDraftInsights } from './draftInsights';
 
 const catalog = Object.fromEntries([1, 2, 3, 4].map(id => [id, { id, localized_name: `Hero ${id}`, roles: ['Carry'] }]));
@@ -41,4 +41,47 @@ test('missing pair data stays unknown and removing an opponent removes its evide
   expect(result.picks.every(row => row.advantage === null && row.matchups.length === 0)).toBe(true);
   const thin = { ...sample, matchups: [{ hero_id: 1, games_played: 99, wins: 1 }] };
   expect(getDraftInsights([{ id: 3, type: 'them' }], players, catalog, 1, { 3: thin }).picks.every(row => row.advantage === null)).toBe(true);
+});
+
+const tournament = (analyzed = 20) => ({ name: 'Test tournament', last_match_time: Date.now() / 1000, analyzed,
+  rows: [{ id: 2, picks: analyzed / 2, bans: analyzed / 2, wins: analyzed / 4 }] });
+
+test('a broad-role hero gets no more role bonus than a single-role comfort hero', () => {
+  const roles = { ...catalog, 1: { ...catalog[1], localized_name: 'Kunkka', roles: ['Carry', 'Nuker', 'Disabler', 'Initiator', 'Durable'] } };
+  const result = getDraftInsights([], [players[0]], roles, 1);
+  expect(result.picks[0].score).toBeCloseTo(result.picks[1].score);
+  expect(result.picks.every(row => row.roleScore === 2)).toBe(true);
+  const metaResult = getDraftInsights([], [players[0]], roles, 1, {}, '', tournament());
+  expect(metaResult.picks[0].id).toBe(2);
+  expect(metaResult.picks[0].tournament).toMatchObject({ picks: 10, bans: 10, analyzed: 20 });
+});
+
+test('tournament priority cannot introduce heroes outside a loaded player pool', () => {
+  const meta = { ...tournament(), rows: [{ id: 4, picks: 20, bans: 0, wins: 20 }] };
+  const result = getDraftInsights([], players, catalog, 1, {}, 'a', meta);
+  expect(result.picks.map(row => row.id)).not.toContain(4);
+  expect(getDraftInsights([], [], catalog, 1, {}, '', meta).picks[0].id).toBe(4);
+});
+
+test('insufficient and stale tournament samples do not affect recommendations; small samples count less', () => {
+  expect(tournamentEvidence(2, tournament(4)).metaScore).toBe(0);
+  expect(tournamentEvidence(2, { ...tournament(), last_match_time: Date.now() / 1000 - 91 * 86400 }).metaScore).toBe(0);
+  expect(tournamentEvidence(2, tournament(6)).metaScore).toBeLessThan(tournamentEvidence(2, tournament(60)).metaScore);
+  expect(tournamentEvidence(1, tournament()).metaScore).toBe(0);
+});
+
+test('recent use and pool specialization are measured within each individual player history', () => {
+  const specialist = { id: 's', name: 'Specialist', team: 'us', summary: { heroes: [{ id: 1, games: 20, recent: 5, decided: 20, wins: 10 }] } };
+  const generalist = { ...specialist, id: 'g', name: 'Generalist', summary: { heroes: [...specialist.summary.heroes, { id: 2, games: 180, recent: 45, decided: 180, wins: 90 }] } };
+  const rows = comfortPlayers(1, [generalist, specialist], 1);
+  expect(rows[0].name).toBe('Specialist');
+  expect(rows[0].share).toBe(1);
+  expect(rows[1].share).toBe(0.1);
+});
+
+test('ban priority uses opponent comfort and tournament evidence, not tag count', () => {
+  const opposing = [{ ...players[0], team: 'them' }];
+  const result = getDraftInsights([], opposing, catalog, 1, {}, '', tournament());
+  expect(result.bans[0].id).toBe(2);
+  expect(result.bans[0].comfort[0].name).toBe('Alice');
 });
